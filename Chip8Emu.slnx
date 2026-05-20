@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Chip8Emu.Core/Chip8Emu.Core.csproj" />
+  <Project Path="Chip8Emu.SdlHost/Chip8Emu.SdlHost.csproj" />
+  <Project Path="Chip8Emu.Test.Core/Chip8Emu.Test.Core.csproj" Id="4d2e2704-96ff-402a-8eb8-e9bf8c1e8977" />
+</Solution>
