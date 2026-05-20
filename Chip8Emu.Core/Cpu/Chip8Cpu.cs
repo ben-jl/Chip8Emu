@@ -133,13 +133,16 @@ namespace Chip8Emu.Core.Cpu
         // 00E0 - CLS
         private void CLS()
         {
-            throw new NotImplementedException();
+            _display.Clear();
+            return;
         }
 
         // 00EE - RET
         private void RET()
         {
-            throw new NotImplementedException();
+            var nxt = _registers.Pop();
+            _registers.SetPC(nxt);
+            return;
         }
 
         // 1nnn - JP addr
@@ -152,25 +155,39 @@ namespace Chip8Emu.Core.Cpu
         // 2nnn - CALL addr
         private void CALL(ushort addr)
         {
-            throw new NotImplementedException();
+            _registers.Push(_registers.PC);
+            _registers.SetPC(addr);
+            return;
         }
 
         // 3xkk - SE Vx, byte
         private void SEBYTE(byte x, byte kk)
         {
-            throw new NotImplementedException();
+            if (_registers.GetV(x) == kk)
+            {
+                _registers.IncrementPC();
+            }
+            return;
         }
 
         // 4xkk - SNE Vx, byte
         private void SNEBYTE(byte x, byte kk)
         {
-            throw new NotImplementedException();
+            if (_registers.GetV(x) != kk)
+            {
+                _registers.IncrementPC();
+            }
+            return;
         }
 
         // 5xy0 - SE Vx, Vy
         private void SEREG(byte x, byte y)
         {
-            throw new NotImplementedException();
+            if (_registers.GetV(x) == _registers.GetV(y))
+            {
+                _registers.IncrementPC();
+            }
+            return;
         }
 
         // 6xkk - LD Vx, byte
@@ -190,61 +207,98 @@ namespace Chip8Emu.Core.Cpu
         // 8xy0 - LD Vx, Vy
         private void LDREG(byte x, byte y)
         {
-            throw new NotImplementedException();
+            _registers.SetV(x, _registers.GetV(y));
+            return;
         }
 
         // 8xy1 - OR Vx, Vy
         private void OR(byte x, byte y)
         {
-            throw new NotImplementedException();
+            var res = _registers.GetV(x) | _registers.GetV(y);
+            _registers.SetV(x, (byte)res);
         }
 
         // 8xy2 - AND Vx, Vy
         private void AND(byte x, byte y)
         {
-            throw new NotImplementedException();
+            var res = _registers.GetV(x) & _registers.GetV(y);
+            _registers.SetV(x, (byte)res);
         }
 
         // 8xy3 - XOR Vx, Vy
         private void XOR(byte x, byte y)
         {
-            throw new NotImplementedException();
+            var res = _registers.GetV(x) ^ _registers.GetV(y);
+            _registers.SetV(x, (byte)res);
         }
 
         // 8xy4 - ADD Vx, Vy
         private void ADDREG(byte x, byte y)
         {
-            throw new NotImplementedException();
+            var res = _registers.GetV(x) + _registers.GetV(y);
+            var carry = res > 0xFF ? 1 : 0;
+
+            var trunc = (byte)(res & 0xFF);
+            _registers.SetV(x, trunc);
+            _registers.SetV(0xF, (byte)carry);
         }
 
         // 8xy5 - SUB Vx, Vy
         private void SUB(byte x, byte y)
         {
-            throw new NotImplementedException();
+            var borrow = _registers.GetV(x) > _registers.GetV(y) ? 1 : 0;
+
+            // TODO validate negative handling
+            var res = (byte)(_registers.GetV(x) - _registers.GetV(y));
+            _registers.SetV(x, res);
+            _registers.SetV(0xF, (byte)borrow);
+            return;
         }
 
         // 8xy6 - SHR Vx {, Vy}
         private void SHR(byte x)
         {
-            throw new NotImplementedException();
+            var lsb = (byte)(_registers.GetV(x) & 0x1);
+            _registers.SetV(x, (byte)(_registers.GetV(x) >> 1));
+            _registers.SetV(0xF, lsb);
+            return;
         }
 
         // 8xy7 - SUBN Vx, Vy
         private void SUBN(byte x, byte y)
         {
-            throw new NotImplementedException();
+            var borrow = _registers.GetV(y) > _registers.GetV(x) ? 1 : 0;
+            var res = (byte)(_registers.GetV(y) - _registers.GetV(x));
+            _registers.SetV(x, res);
+            _registers.SetV(0xF, (byte)borrow);
+             return;
         }
 
         // 8xyE - SHL Vx {, Vy}
         private void SHL(byte x)
         {
-            throw new NotImplementedException();
+            // TODO validate behavior
+            var msb = (byte)((_registers.GetV(x) & 0x80) >> 7);
+
+            var val = (byte)(_registers.GetV(x));
+            if(msb == 1)
+            {
+                val = (byte)(val & 0x7F);
+            }
+
+            _registers.SetV(x, val);
+            _registers.SetV(0xF, msb);
+             return;
         }
 
         // 9xy0 - SNE Vx, Vy
         private void SNEREG(byte x, byte y)
         {
-            throw new NotImplementedException();
+            if (_registers.GetV(x) != _registers.GetV(y))
+            {
+                _registers.IncrementPC();
+            }
+             return;
         }
 
         // Annn - LD I, addr
@@ -257,12 +311,15 @@ namespace Chip8Emu.Core.Cpu
         // Bnnn - JP V0, addr
         private void JPV0(ushort nnn)
         {
-            throw new NotImplementedException();
+            var target = (ushort)(nnn + _registers.GetV(0));
+            _registers.SetPC(target);
+             return;
         }
 
         // Cxkk - RND Vx, byte
         private void RND(byte x, byte kk)
         {
+            // TODO implement with seed
             throw new NotImplementedException();
         }
 
@@ -334,31 +391,52 @@ namespace Chip8Emu.Core.Cpu
         // Fx1E - ADD I, Vx
         private void ADDI(byte x)
         {
-            throw new NotImplementedException();
+            var res = _registers.I + _registers.GetV(x);
+            _registers.SetI((ushort)res);
+             return;
         }
 
         // Fx29 - LD F, Vx
         private void LDFNT(byte x)
         {
-            throw new NotImplementedException();
+            var digit = _registers.GetV(x);
+            var fontAddress = (ushort)(_memoryMap.FontStart + digit * _memoryMap.FontSize);
+            _registers.SetI(fontAddress);
+             return;
         }
 
         // Fx33 - LD B, Vx
         private void LDBCD(byte x)
         {
-            throw new NotImplementedException();
+            var value = _registers.GetV(x);
+            var hundreds = (byte)(value / 100);
+            var tens = (byte)((value % 100) / 10);
+            var ones = (byte)(value % 10);
+
+            _memoryBus.Write(_registers.I, hundreds);
+            _memoryBus.Write((ushort)(_registers.I + 1), tens);
+            _memoryBus.Write((ushort)(_registers.I + 2), ones);
+             return;
         }
 
         // Fx55 - LD [I], Vx
         private void STREGI(byte x)
         {
-            throw new NotImplementedException();
+            for (int i = 0; i <= x; i++)
+            {
+                _memoryBus.Write((ushort)(_registers.I + i), _registers.GetV((byte)i));
+            }
+             return;
         }
 
         // Fx65 - LD Vx, [I]
         private void LDREGI(byte x)
         {
-            throw new NotImplementedException();
+            for (int i = 0; i <= x; i++)
+            {
+                _registers.SetV((byte)i, _memoryBus.Read((ushort)(_registers.I + i)));
+            }
+             return;
         }
     }
 }
