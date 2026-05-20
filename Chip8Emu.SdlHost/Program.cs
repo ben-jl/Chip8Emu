@@ -36,7 +36,7 @@ internal static class Program
         }
 
         var frameBufferRenderer = new SdlFramebufferRenderer(renderer, Scale);
-        var displayBuffer = GetTestDisplayBuffer();
+        var machine = GetTestMachine();
 
         var running = true;
         while (running)
@@ -49,11 +49,12 @@ internal static class Program
                 }
 
                 frameBufferRenderer.Render(
-                    displayBuffer,
+                    machine.Display.Buffer,
                     Chip8Width,
                     Chip8Height);
 
                 SDL.Delay(16); // Roughly 60 FPS
+                machine.StepFrame();
             }
         }
 
@@ -66,13 +67,25 @@ internal static class Program
     {
         var machine = new Chip8Machine();
         machine.LoadRom([
-                0x60, 0x01, // LD V0, 1
-                0xD0, 0x05 // DRW V0, V0, 5 ; Should be the zero sprite
+                
                 ]);
 
         machine.StepInstruction(); // LD V0, 1
         machine.StepInstruction(); // DRW V0, V0, 5
 
         return machine.Display.Buffer;
+    }
+
+    private static Chip8Machine GetTestMachine()
+    {
+        var machine = new Chip8Machine();
+
+        machine.LoadRom([
+            0x60, 0x01, // LD V0, 1
+            0xD0, 0x05, // DRW V0, V0, 5 ; Should be the zero sprite
+            0x12, 0x00  // JP 0x200 ; Loop indefinitely
+            ]);
+
+        return machine;
     }
 }
