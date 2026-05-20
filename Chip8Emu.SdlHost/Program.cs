@@ -1,11 +1,17 @@
-﻿using SDL3;
+﻿using Chip8Emu.Core.Machine;
+using SDL3;
+using System.Reflection.PortableExecutable;
 
 namespace Chip8Emu.SdlHost;
 
 internal static class Program
 {
-    private const int WindowWidth = 1024;
-    private const int WindowHeight = 512;
+    private const int Chip8Width = 64;
+    private const int Chip8Height = 32;
+    private const int Scale = 16;
+
+    private const int WindowWidth = Chip8Width * Scale;
+    private const int WindowHeight = Chip8Height * Scale;
 
     [STAThread]
     private static void Main()
@@ -29,6 +35,9 @@ internal static class Program
             return;
         }
 
+        var frameBufferRenderer = new SdlFramebufferRenderer(renderer, Scale);
+        var displayBuffer = GetTestDisplayBuffer();
+
         var running = true;
         while (running)
         {
@@ -39,9 +48,10 @@ internal static class Program
                     running = false;
                 }
 
-                SDL.SetRenderDrawColor(renderer, 24, 32, 48, 255);
-                SDL.RenderClear(renderer);
-                SDL.RenderPresent(renderer);
+                frameBufferRenderer.Render(
+                    displayBuffer,
+                    Chip8Width,
+                    Chip8Height);
 
                 SDL.Delay(16); // Roughly 60 FPS
             }
@@ -50,5 +60,19 @@ internal static class Program
         SDL.DestroyRenderer(renderer);
         SDL.DestroyWindow(window);
         SDL.Quit();
+    }
+
+    private static ReadOnlySpan<byte> GetTestDisplayBuffer()
+    {
+        var machine = new Chip8Machine();
+        machine.LoadRom([
+                0x60, 0x01, // LD V0, 1
+                0xD0, 0x05 // DRW V0, V0, 5 ; Should be the zero sprite
+                ]);
+
+        machine.StepInstruction(); // LD V0, 1
+        machine.StepInstruction(); // DRW V0, V0, 5
+
+        return machine.Display.Buffer;
     }
 }
