@@ -36,7 +36,8 @@ namespace Chip8Emu.Core.Machine
             _memoryMap = new MemoryMap();
             _display = new MonochromeFrameBuffer(64, 32);
             _keypad = new KeypadState();
-            _cpu = new Chip8Cpu(_memory, _memoryMap);
+            _cpu = new Chip8Cpu(_memory, _memoryMap, _display);
+            Chip8Font.LoadInto(_memory, _memoryMap);
         }
 
         public IFrameBuffer Display => _display;

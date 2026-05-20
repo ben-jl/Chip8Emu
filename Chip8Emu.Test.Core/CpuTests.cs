@@ -1,4 +1,5 @@
 ﻿using Chip8Emu.Core.Cpu;
+using Chip8Emu.Core.Display;
 using Chip8Emu.Core.Memory;
 
 namespace Chip8Emu.Test.Core
@@ -24,7 +25,7 @@ namespace Chip8Emu.Test.Core
             {
                 var memoryMap = new MemoryMap();
                 _memoryBus = new MemoryBus(memoryMap.MemorySize);
-                _cpu = new Chip8Cpu(_memoryBus, memoryMap);
+                _cpu = new Chip8Cpu(_memoryBus, memoryMap, new MonochromeFrameBuffer(64, 32));
                 
                 // Use reflection to access private _registers field
                 var registersField = typeof(Chip8Cpu).GetField("_registers", 

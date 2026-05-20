@@ -269,7 +269,30 @@ namespace Chip8Emu.Core.Cpu
         // Dxyn - DRW Vx, Vy, nibble
         private void DRW(byte x, byte y, byte n)
         {
-            throw new NotImplementedException();
+            byte[] spriteDate = new byte[n];
+            for (int i = 0; i < n; i++)
+            {
+                spriteDate[i] = _memoryBus.Read((ushort)(_registers.I + i));
+            }
+
+            for(int row = 0; row < n; row++)
+            {
+                byte spritRow = spriteDate[row];
+                for(int col = 0; col < 8; col++)
+                {
+                    bool pixelOn = (spritRow & (0x80 >> col)) != 0;
+                    if (pixelOn)
+                    {
+                        bool erased = _display.XorPixel((byte)(_registers.GetV(x) + col), (byte)(_registers.GetV(y) + row));
+                        if (erased)
+                        {
+                            _registers.SetV(0xF, 1);
+                        }
+                    }
+                }
+            }
+
+            return;
         }
 
         // ExE9E - SKP Vx
