@@ -11,5 +11,6 @@ namespace Chip8Emu.Core.Memory
         byte Read(ushort address);
         void Write(ushort address, byte value);
         void WriteBlock(ushort startAddress, ReadOnlySpan<byte> data);
+        void Clear();
     }
 }

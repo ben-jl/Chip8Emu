@@ -47,5 +47,10 @@ namespace Chip8Emu.Core.Memory
                 _memory[startAddress + i] = data[i];
             }
         }
+
+        public void Clear()
+        {
+            Array.Clear(_memory);
+        }
     }
 }

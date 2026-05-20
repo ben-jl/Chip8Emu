@@ -45,20 +45,6 @@ namespace Chip8Emu.Test.Core
         }
 
         [Fact]
-        public void Constructor_ShouldInitializeDelayTimerToZero()
-        {
-            var registers = CreateRegisters();
-            Assert.Equal((byte)0, registers.Delay);
-        }
-
-        [Fact]
-        public void Constructor_ShouldInitializeSoundTimerToZero()
-        {
-            var registers = CreateRegisters();
-            Assert.Equal((byte)0, registers.Sound);
-        }
-
-        [Fact]
         public void Constructor_ShouldInitializeStackToZeros()
         {
             var registers = CreateRegisters();

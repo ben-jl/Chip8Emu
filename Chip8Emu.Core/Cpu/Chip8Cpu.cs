@@ -1,22 +1,44 @@
-﻿using Chip8Emu.Core.Memory;
+﻿using Chip8Emu.Core.Diagnostics;
+using Chip8Emu.Core.Display;
+using Chip8Emu.Core.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace Chip8Emu.Core.Cpu
 {
-    internal sealed class Cpu
+    internal sealed class Chip8Cpu
     {
         private readonly Registers _registers;
+        private readonly MemoryMap _memoryMap;
         private readonly IMemoryBus _memoryBus;
         private readonly InstructionDecoder _decoder;
-        public Cpu(IMemoryBus memoryBus, MemoryMap memoryMap)
+        private readonly IFrameBuffer _display;
+
+        public Chip8Cpu(IMemoryBus memoryBus, MemoryMap memoryMap, IFrameBuffer display)
         {
+            _memoryMap = memoryMap;
             _memoryBus = memoryBus;
+            _display = display;
             _registers = new Registers(memoryMap);
             _decoder = new InstructionDecoder();
+        }
+
+        public CpuSnapshot CurrentSnapshot()
+        {
+            return new CpuSnapshot(
+                _registers.PC,
+                _registers.I,
+                _registers.GetRegisterSnapshot()
+                );
+        }
+
+        public void Reset()
+        {
+            _registers.Reset(_memoryMap);
         }
 
         public void Step()

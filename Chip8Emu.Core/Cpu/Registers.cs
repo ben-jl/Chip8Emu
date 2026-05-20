@@ -16,9 +16,6 @@ namespace Chip8Emu.Core.Cpu
         public ushort PC { get; private set; } // Program counter
         public byte SP { get; private set; } // Stack pointer
 
-        public byte Delay { get; private set; } // Delay timer
-        public byte Sound { get; private set; } // Sound timer
-
         public ushort[] Stack { get; private set; } // Stack for subroutine calls
 
         public Registers(MemoryMap memoryMap)
@@ -32,8 +29,22 @@ namespace Chip8Emu.Core.Cpu
             I = 0;
             PC = memoryMap.RomStart;
             SP = 0;
-            Delay = 0;
-            Sound = 0;
+        }
+
+        public void Reset(MemoryMap memoryMap)
+        {
+            Array.Clear(_v);
+            Array.Clear(Stack);
+            I = 0;
+            PC = memoryMap.RomStart;
+            SP = 0;
+        }
+
+        public byte[] GetRegisterSnapshot() 
+        { 
+            byte[] snapshot = new byte[16];
+            Array.Copy(_v, snapshot, 16);
+            return snapshot;
         }
 
         public byte GetV(byte register)
