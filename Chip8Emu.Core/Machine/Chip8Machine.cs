@@ -45,7 +45,8 @@ namespace Chip8Emu.Core.Machine
                 _keypad, 
                 _timers,
                 _options.ResetCarryFlagOnBitwiseOps,
-                _options.IncrementIOnStoreLoadMemoryOps);
+                _options.IncrementIOnStoreLoadMemoryOps,
+                _options.ShiftUsesVy);
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
 

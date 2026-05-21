@@ -22,7 +22,10 @@ namespace Chip8Emu.Test.Core
             private readonly TestableRegisters _registers;
             private readonly MemoryBus _memoryBus;
 
-            public TestableCpu(bool resetCarryFlagOnBitwiseOps = true, bool incrementIOnStoreLoadMemoryOps = false)
+            public TestableCpu(
+                bool resetCarryFlagOnBitwiseOps = true, 
+                bool incrementIOnStoreLoadMemoryOps = false,
+                bool shiftUsesVY = false)
             {
                 var memoryMap = new MemoryMap();
                 _memoryBus = new MemoryBus(memoryMap.MemorySize);
@@ -34,7 +37,8 @@ namespace Chip8Emu.Test.Core
                     new KeypadState(),
                     new Chip8Emu.Core.Timing.Timers(),
                     resetCarryFlagOnBitwiseOps,
-                    incrementIOnStoreLoadMemoryOps);
+                    incrementIOnStoreLoadMemoryOps,
+                    shiftUsesVY);
                 
                 // Use reflection to access private _registers field
                 var registersField = typeof(Chip8Cpu).GetField("_registers", 
@@ -1300,6 +1304,54 @@ namespace Chip8Emu.Test.Core
 
         #endregion
 
+        #region ShiftUsesVY Quirk Tests
+
+        [Theory]
+        [InlineData(false, 0x02, 0x00)] // Uses Vx=0x04: 0x04 >> 1 => 0x02, LSB=0
+        [InlineData(true, 0x01, 0x01)]  // Uses Vy=0x03: 0x03 >> 1 => 0x01, LSB=1
+        public void SHR_ShouldRespectShiftUsesVY(bool shiftUsesVY, byte expectedV1, byte expectedVf)
+        {
+            var cpu = new TestableCpu(
+                resetCarryFlagOnBitwiseOps: true,
+                incrementIOnStoreLoadMemoryOps: false,
+                shiftUsesVY: shiftUsesVY);
+            cpu.WriteOpcode(0x200, 0x6104); // LD V1, 0x04
+            cpu.WriteOpcode(0x202, 0x6203); // LD V2, 0x03
+            cpu.WriteOpcode(0x204, 0x8126); // SHR V1 {, V2}
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal(expectedV1, cpu.GetV(0x1));
+            Assert.Equal(expectedVf, cpu.GetV(0xF));
+            Assert.Equal((byte)0x03, cpu.GetV(0x2)); // Vy should remain unchanged
+        }
+
+        [Theory]
+        [InlineData(false, 0x02, 0x00)] // Uses Vx=0x01: 0x01 << 1 => 0x02, MSB=0
+        [InlineData(true, 0x00, 0x01)]  // Uses Vy=0x80: 0x80 << 1 => 0x00, MSB=1
+        public void SHL_ShouldRespectShiftUsesVY(bool shiftUsesVY, byte expectedV1, byte expectedVf)
+        {
+            var cpu = new TestableCpu(
+                resetCarryFlagOnBitwiseOps: true,
+                incrementIOnStoreLoadMemoryOps: false,
+                shiftUsesVY: shiftUsesVY);
+            cpu.WriteOpcode(0x200, 0x6101); // LD V1, 0x01
+            cpu.WriteOpcode(0x202, 0x6280); // LD V2, 0x80
+            cpu.WriteOpcode(0x204, 0x812E); // SHL V1 {, V2}
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal(expectedV1, cpu.GetV(0x1));
+            Assert.Equal(expectedVf, cpu.GetV(0xF));
+            Assert.Equal((byte)0x80, cpu.GetV(0x2)); // Vy should remain unchanged
+        }
+
+        #endregion
+
         #region SNEREG (9xy0) - Skip if Vx != Vy Tests
 
         [Fact]
@@ -1460,6 +1512,32 @@ namespace Chip8Emu.Test.Core
             Assert.Equal((byte)0x55, cpu.MemoryBus.Read(0x300));
         }
 
+        [Theory]
+        [InlineData(false, 0x300)]
+        [InlineData(true, 0x303)]
+        public void STREGI_ShouldRespectIncrementIOnStoreLoadMemoryOps(bool incrementIOnStoreLoadMemoryOps, ushort expectedI)
+        {
+            var cpu = new TestableCpu(
+                resetCarryFlagOnBitwiseOps: true,
+                incrementIOnStoreLoadMemoryOps: incrementIOnStoreLoadMemoryOps);
+            cpu.WriteOpcode(0x200, 0x6011); // LD V0, 0x11
+            cpu.WriteOpcode(0x202, 0x6122); // LD V1, 0x22
+            cpu.WriteOpcode(0x204, 0x6233); // LD V2, 0x33
+            cpu.WriteOpcode(0x206, 0xA300); // LD I, 0x300
+            cpu.WriteOpcode(0x208, 0xF255); // LD [I], V2
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0x11, cpu.MemoryBus.Read(0x300));
+            Assert.Equal((byte)0x22, cpu.MemoryBus.Read(0x301));
+            Assert.Equal((byte)0x33, cpu.MemoryBus.Read(0x302));
+            Assert.Equal(expectedI, cpu.I);
+        }
+
         #endregion
 
         #region LDREGI (Fx65) - Load registers from memory Tests
@@ -1494,6 +1572,29 @@ namespace Chip8Emu.Test.Core
             cpu.Step();
 
             Assert.Equal((byte)0x77, cpu.GetV(0x0));
+        }
+
+        [Theory]
+        [InlineData(false, 0x300)]
+        [InlineData(true, 0x303)]
+        public void LDREGI_ShouldRespectIncrementIOnStoreLoadMemoryOps(bool incrementIOnStoreLoadMemoryOps, ushort expectedI)
+        {
+            var cpu = new TestableCpu(
+                resetCarryFlagOnBitwiseOps: true,
+                incrementIOnStoreLoadMemoryOps: incrementIOnStoreLoadMemoryOps);
+            cpu.MemoryBus.Write(0x300, 0xAA);
+            cpu.MemoryBus.Write(0x301, 0xBB);
+            cpu.MemoryBus.Write(0x302, 0xCC);
+            cpu.WriteOpcode(0x200, 0xA300); // LD I, 0x300
+            cpu.WriteOpcode(0x202, 0xF265); // LD V2, [I]
+
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0xAA, cpu.GetV(0x0));
+            Assert.Equal((byte)0xBB, cpu.GetV(0x1));
+            Assert.Equal((byte)0xCC, cpu.GetV(0x2));
+            Assert.Equal(expectedI, cpu.I);
         }
 
         #endregion

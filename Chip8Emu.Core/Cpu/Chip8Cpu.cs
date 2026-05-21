@@ -27,6 +27,7 @@ namespace Chip8Emu.Core.Cpu
 
         private readonly bool _resetCarryFlagOnBitwiseOp;
         private readonly bool _incrementIOnStoreLoadMemoryOp;
+        private readonly bool _shiftUsesVy;
 
         public Chip8Cpu(
             IMemoryBus memoryBus, 
@@ -36,7 +37,8 @@ namespace Chip8Emu.Core.Cpu
             IKeypad keypad,
             Timers timers,
             bool resetCarryFlagOnBitwiseOp,
-            bool incrementIOnStoreLoadMemoryOp)
+            bool incrementIOnStoreLoadMemoryOp,
+            bool shiftUsesVy)
         {
             ArgumentNullException.ThrowIfNull(memoryBus);
             ArgumentNullException.ThrowIfNull(memoryMap);
@@ -55,6 +57,7 @@ namespace Chip8Emu.Core.Cpu
             _timers = timers;
             _resetCarryFlagOnBitwiseOp = resetCarryFlagOnBitwiseOp;
             _incrementIOnStoreLoadMemoryOp = incrementIOnStoreLoadMemoryOp;
+            _shiftUsesVy = shiftUsesVy;
         }
 
         public CpuSnapshot CurrentSnapshot()
@@ -136,13 +139,13 @@ namespace Chip8Emu.Core.Cpu
                     SUB(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
                     break;
                 case Chip8InstructionSet.PatternSHR:
-                    SHR(operands.RequireX(mnemonic));
+                    SHR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
                     break;
                 case Chip8InstructionSet.PatternSUBN:
                     SUBN(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
                     break;
                 case Chip8InstructionSet.PatternSHL:
-                    SHL(operands.RequireX(mnemonic));
+                    SHL(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
                     break;
                 case Chip8InstructionSet.PatternSNEReg:
                     SNEREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
@@ -352,8 +355,12 @@ namespace Chip8Emu.Core.Cpu
         }
 
         // 8xy6 - SHR Vx {, Vy}
-        private void SHR(byte x)
+        private void SHR(byte x, byte y)
         {
+            if (_shiftUsesVy)
+            {
+                _registers.SetV(x, _registers.GetV(y));
+            }
             var lsb = (byte)(_registers.GetV(x) & 0x1);
             _registers.SetV(x, (byte)(_registers.GetV(x) >> 1));
             _registers.SetV(0xF, lsb);
@@ -371,9 +378,12 @@ namespace Chip8Emu.Core.Cpu
         }
 
         // 8xyE - SHL Vx {, Vy}
-        private void SHL(byte x)
+        private void SHL(byte x, byte y)
         {
-            // TODO validate behavior
+            if(_shiftUsesVy)
+            {
+                _registers.SetV(x, _registers.GetV(y));
+            }
             var msb = (byte)((_registers.GetV(x) & 0x80) >> 7);
 
             var val = (byte)(_registers.GetV(x));
