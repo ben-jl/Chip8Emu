@@ -1,23 +1,48 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Chip8Emu.Core.Cpu
 {
-    internal class InstructionDecoder
+    internal sealed class InstructionDecoder
     {
-        public InstructionDecoder() { }
+        private readonly IReadOnlyList<InstructionDefinition> _definitions;
 
-        public Instruction Decode(ushort opcode)
+        public InstructionDecoder() : this(Chip8InstructionSet.Definitions)
         {
-            byte x = (byte)((opcode & 0x0F00) >> 8);
-            byte y = (byte)((opcode & 0x00F0) >> 4);
-            byte n = (byte)(opcode & 0x000F);
-            byte nn = (byte)(opcode & 0x00FF);
-            ushort nnn = (ushort)(opcode & 0x0FFF);
-            return new Instruction(opcode, x, y, n, nn, nnn);
+        }
+
+        public InstructionDecoder(IReadOnlyList<InstructionDefinition> definitions)
+        {
+            ArgumentNullException.ThrowIfNull(definitions);
+            _definitions = definitions;
+        }
+
+        public InstructionDecodeResult Decode(ushort opcode)
+        {
+            foreach (var definition in _definitions)
+            {
+                if ((opcode & definition.Mask) != definition.Pattern)
+                {
+                    continue;
+                }
+
+                var operands = definition.Decode(opcode);
+                var decodedInstruction = new DecodedInstruction(opcode, definition, operands);
+                return new InstructionDecodeResult.Valid(decodedInstruction);
+            }
+
+            return new InstructionDecodeResult.Invalid(opcode, $"Unknown opcode: {opcode:X4}");
+        }
+
+        public DecodedInstruction DecodeOrThrow(ushort opcode)
+        {
+            var result = Decode(opcode);
+            return result switch
+            {
+                InstructionDecodeResult.Valid valid => valid.Instruction,
+                InstructionDecodeResult.Invalid invalid => throw new InvalidOperationException(invalid.Reason),
+                _ => throw new InvalidOperationException("Unexpected decode result.")
+            };
         }
     }
 }

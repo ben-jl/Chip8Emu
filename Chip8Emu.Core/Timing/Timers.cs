@@ -8,25 +8,74 @@ namespace Chip8Emu.Core.Timing
 {
     public sealed class Timers
     {
-        public byte DelayTimer { get; set; }
-        public byte SoundTimer { get; set; }
+        private byte _delayTimer;
+        private byte _soundTimer;
+        private bool _delayWrittenSinceLastTick;
+        private bool _soundWrittenSinceLastTick;
 
-        public void Tick()
+        public byte DelayTimer
         {
-            if (DelayTimer > 0)
+            get => _delayTimer;
+            set
             {
-                DelayTimer--;
+                _delayTimer = value;
+                _delayWrittenSinceLastTick = true;
             }
-            if (SoundTimer > 0)
+        }
+
+        public byte SoundTimer
+        {
+            get => _soundTimer;
+            set
             {
-                SoundTimer--;
+                _soundTimer = value;
+                _soundWrittenSinceLastTick = true;
+            }
+        }
+
+        public void Tick(bool skipFreshWrites = false)
+        {
+            if (_delayTimer > 0)
+            {
+                if (skipFreshWrites && _delayWrittenSinceLastTick)
+                {
+                    _delayWrittenSinceLastTick = false;
+                }
+                else
+                {
+                    _delayTimer--;
+                    _delayWrittenSinceLastTick = false;
+                }
+            }
+            else
+            {
+                _delayWrittenSinceLastTick = false;
+            }
+
+            if (_soundTimer > 0)
+            {
+                if (skipFreshWrites && _soundWrittenSinceLastTick)
+                {
+                    _soundWrittenSinceLastTick = false;
+                }
+                else
+                {
+                    _soundTimer--;
+                    _soundWrittenSinceLastTick = false;
+                }
+            }
+            else
+            {
+                _soundWrittenSinceLastTick = false;
             }
         }
 
         public void Reset()
         {
-            DelayTimer = 0;
-            SoundTimer = 0;
+            _delayTimer = 0;
+            _soundTimer = 0;
+            _delayWrittenSinceLastTick = false;
+            _soundWrittenSinceLastTick = false;
         }   
     }
 }

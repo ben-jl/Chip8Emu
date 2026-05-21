@@ -1,4 +1,4 @@
-﻿using Chip8Emu.Core.Cpu;
+using Chip8Emu.Core.Cpu;
 using Chip8Emu.Core.Diagnostics;
 using Chip8Emu.Core.Display;
 using Chip8Emu.Core.Input;
@@ -23,6 +23,7 @@ namespace Chip8Emu.Core.Machine
         private readonly MemoryMap _memoryMap;
 
         private readonly EmulationOptions _options;
+        private int _instructionsSinceLastTimerTick;
 
         public Chip8Machine() : this(null)
         {
@@ -36,7 +37,17 @@ namespace Chip8Emu.Core.Machine
             _memoryMap = new MemoryMap();
             _display = new MonochromeFrameBuffer(64, 32);
             _keypad = new KeypadState();
-            _cpu = new Chip8Cpu(_memory, _memoryMap, _display, _options.RandomSeed, _keypad, _timers);
+            _cpu = new Chip8Cpu(
+                _memory, 
+                _memoryMap, 
+                _display, 
+                _options.RandomSeed, 
+                _keypad, 
+                _timers,
+                _options.ResetCarryFlagOnBitwiseOps,
+                _options.IncrementIOnStoreLoadMemoryOps,
+                _options.ShiftUsesVy,
+                _options.ClipSprites);
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
 
@@ -57,6 +68,7 @@ namespace Chip8Emu.Core.Machine
             _keypad.Clear();
             _timers.Reset();
             _cpu.Reset();
+            _instructionsSinceLastTimerTick = 0;
 
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
@@ -66,19 +78,47 @@ namespace Chip8Emu.Core.Machine
             _keypad.SetKey(key, isPressed);
         }
 
+        /// <summary>
+        /// Executes one emulated frame. Timer cadence in this mode is one tick per frame.
+        /// </summary>
         public void StepFrame()
         {
-            for(var i = 0; i < _options.InstructionsPerFrame; i++)
+            var instructionBudget = Math.Max(1, _options.InstructionsPerFrame);
+            var drewSpriteThisFrame = false;
+            for(var i = 0; i < instructionBudget; i++)
             {
-                StepInstruction();
+                var allowDraw = !_options.DisplayWaitOnDraw || !drewSpriteThisFrame;
+                var stepResult = _cpu.Step(allowDraw);
+                if (stepResult.WaitingForDrawVBlank)
+                {
+                    break;
+                }
+                if (stepResult.DrewSprite)
+                {
+                    drewSpriteThisFrame = true;
+                }
             }
 
+            // Frame stepping uses frame cadence for timers.
             _timers.Tick();
+            _instructionsSinceLastTimerTick = 0;
         }
 
+        /// <summary>
+        /// Executes one instruction. Timer cadence in this mode is instruction-dependent.
+        /// </summary>
         public void StepInstruction()
         {
-            _cpu.Step();
+            _ = _cpu.Step();
+            _instructionsSinceLastTimerTick++;
+
+            // Instruction stepping uses instruction cadence for timers.
+            var tickInterval = Math.Max(1, _options.InstructionsPerFrame);
+            if (_instructionsSinceLastTimerTick >= tickInterval)
+            {
+                _timers.Tick();
+                _instructionsSinceLastTimerTick = 0;
+            }
         }
 
         public MachineSnapshot CurrentSnapshot()

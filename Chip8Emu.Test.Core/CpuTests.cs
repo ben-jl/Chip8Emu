@@ -1,4 +1,4 @@
-﻿using Chip8Emu.Core.Cpu;
+using Chip8Emu.Core.Cpu;
 using Chip8Emu.Core.Display;
 using Chip8Emu.Core.Input;
 using Chip8Emu.Core.Memory;
@@ -21,18 +21,28 @@ namespace Chip8Emu.Test.Core
             private readonly Chip8Cpu _cpu;
             private readonly TestableRegisters _registers;
             private readonly MemoryBus _memoryBus;
+            private readonly MonochromeFrameBuffer _display;
 
-            public TestableCpu()
+            public TestableCpu(
+                bool resetCarryFlagOnBitwiseOps = true, 
+                bool incrementIOnStoreLoadMemoryOps = false,
+                bool shiftUsesVY = false,
+                bool clipSprites = true)
             {
                 var memoryMap = new MemoryMap();
                 _memoryBus = new MemoryBus(memoryMap.MemorySize);
+                _display = new MonochromeFrameBuffer(64, 32);
                 _cpu = new Chip8Cpu(
                     _memoryBus, 
                     memoryMap, 
-                    new MonochromeFrameBuffer(64, 32), 
+                    _display, 
                     randomSeed: 12345, 
                     new KeypadState(),
-                    new Chip8Emu.Core.Timing.Timers());
+                    new Chip8Emu.Core.Timing.Timers(),
+                    resetCarryFlagOnBitwiseOps,
+                    incrementIOnStoreLoadMemoryOps,
+                    shiftUsesVY,
+                    clipSprites);
                 
                 // Use reflection to access private _registers field
                 var registersField = typeof(Chip8Cpu).GetField("_registers", 
@@ -48,6 +58,7 @@ namespace Chip8Emu.Test.Core
             public ushort PC => _registers.PC;
             public ushort I => _registers.I;
             public byte GetV(byte register) => _registers.GetV(register);
+            public byte GetPixel(int x, int y) => _display.Buffer[y * _display.Width + x];
 
             public void WriteOpcode(ushort address, ushort opcode)
             {
@@ -1127,6 +1138,61 @@ namespace Chip8Emu.Test.Core
 
         #endregion
 
+        #region Bitwise VF Quirk (COSMAC) Tests
+
+        [Theory]
+        [InlineData(true, 0x8121, 0x00)] // OR V1, V2
+        [InlineData(true, 0x8122, 0x00)] // AND V1, V2
+        [InlineData(true, 0x8123, 0x00)] // XOR V1, V2
+        [InlineData(false, 0x8121, 0x01)] // OR V1, V2
+        [InlineData(false, 0x8122, 0x01)] // AND V1, V2
+        [InlineData(false, 0x8123, 0x01)] // XOR V1, V2
+        public void BitwiseOps_ShouldRespectResetCarryFlagOnBitwiseOps(bool resetCarryFlagOnBitwiseOps, ushort bitwiseOpcode, byte expectedVf)
+        {
+            var cpu = new TestableCpu(resetCarryFlagOnBitwiseOps);
+            cpu.WriteOpcode(0x200, 0x6F01); // LD VF, 0x01
+            cpu.WriteOpcode(0x202, 0x61AA); // LD V1, 0xAA
+            cpu.WriteOpcode(0x204, 0x6255); // LD V2, 0x55
+            cpu.WriteOpcode(0x206, bitwiseOpcode);
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal(expectedVf, cpu.GetV(0xF));
+        }
+
+        [Theory]
+        [InlineData(0x8121, 0xBE)] // OR 0xAA, 0x14
+        [InlineData(0x8122, 0x00)] // AND 0xAA, 0x14
+        [InlineData(0x8123, 0xBE)] // XOR 0xAA, 0x14
+        public void BitwiseOps_ShouldNotChangeResult_WhenResetCarryFlagOnBitwiseOpsToggles(ushort bitwiseOpcode, byte expectedVx)
+        {
+            var cpuWithReset = new TestableCpu(true);
+            cpuWithReset.WriteOpcode(0x200, 0x61AA); // LD V1, 0xAA
+            cpuWithReset.WriteOpcode(0x202, 0x6214); // LD V2, 0x14
+            cpuWithReset.WriteOpcode(0x204, bitwiseOpcode);
+
+            cpuWithReset.Step();
+            cpuWithReset.Step();
+            cpuWithReset.Step();
+
+            var cpuWithoutReset = new TestableCpu(false);
+            cpuWithoutReset.WriteOpcode(0x200, 0x61AA); // LD V1, 0xAA
+            cpuWithoutReset.WriteOpcode(0x202, 0x6214); // LD V2, 0x14
+            cpuWithoutReset.WriteOpcode(0x204, bitwiseOpcode);
+
+            cpuWithoutReset.Step();
+            cpuWithoutReset.Step();
+            cpuWithoutReset.Step();
+
+            Assert.Equal(expectedVx, cpuWithReset.GetV(0x1));
+            Assert.Equal(expectedVx, cpuWithoutReset.GetV(0x1));
+        }
+
+        #endregion
+
         #region ADDREG (8xy4) - Add Vx, Vy with carry Tests
 
         [Theory]
@@ -1156,7 +1222,7 @@ namespace Chip8Emu.Test.Core
         [Theory]
         [InlineData(0x20, 0x10, 0x10, 1)]
         [InlineData(0x10, 0x20, 0xF0, 0)]
-        [InlineData(0x00, 0x00, 0x00, 0)]
+        [InlineData(0x00, 0x00, 0x00, 1)]
         [InlineData(0xFF, 0x01, 0xFE, 1)]
         public void SUB_ShouldSubtractWithBorrowFlag(byte vxValue, byte vyValue, byte expectedResult, byte expectedBorrow)
         {
@@ -1202,7 +1268,7 @@ namespace Chip8Emu.Test.Core
         [Theory]
         [InlineData(0x10, 0x20, 0x10, 1)]
         [InlineData(0x20, 0x10, 0xF0, 0)]
-        [InlineData(0x00, 0x00, 0x00, 0)]
+        [InlineData(0x00, 0x00, 0x00, 1)]
         [InlineData(0x01, 0xFF, 0xFE, 1)]
         public void SUBN_ShouldSubtractVxFromVyWithBorrowFlag(byte vxValue, byte vyValue, byte expectedResult, byte expectedBorrow)
         {
@@ -1224,9 +1290,9 @@ namespace Chip8Emu.Test.Core
         #region SHL (8xyE) - Shift left Tests
 
         [Theory]
-        [InlineData(0x01, 0x01, 0)]
+        [InlineData(0x01, 0x02, 0)]
         [InlineData(0x80, 0x00, 1)]
-        [InlineData(0xFF, 0x7F, 1)]
+        [InlineData(0xFF, 0xFE, 1)]
         [InlineData(0x00, 0x00, 0)]
         public void SHL_ShouldShiftLeftAndSetMSB(byte vxValue, byte expectedResult, byte expectedMSB)
         {
@@ -1239,6 +1305,54 @@ namespace Chip8Emu.Test.Core
 
             Assert.Equal(expectedResult, cpu.GetV(0x1));
             Assert.Equal(expectedMSB, cpu.GetV(0xF));
+        }
+
+        #endregion
+
+        #region ShiftUsesVY Quirk Tests
+
+        [Theory]
+        [InlineData(false, 0x02, 0x00)] // Uses Vx=0x04: 0x04 >> 1 => 0x02, LSB=0
+        [InlineData(true, 0x01, 0x01)]  // Uses Vy=0x03: 0x03 >> 1 => 0x01, LSB=1
+        public void SHR_ShouldRespectShiftUsesVY(bool shiftUsesVY, byte expectedV1, byte expectedVf)
+        {
+            var cpu = new TestableCpu(
+                resetCarryFlagOnBitwiseOps: true,
+                incrementIOnStoreLoadMemoryOps: false,
+                shiftUsesVY: shiftUsesVY);
+            cpu.WriteOpcode(0x200, 0x6104); // LD V1, 0x04
+            cpu.WriteOpcode(0x202, 0x6203); // LD V2, 0x03
+            cpu.WriteOpcode(0x204, 0x8126); // SHR V1 {, V2}
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal(expectedV1, cpu.GetV(0x1));
+            Assert.Equal(expectedVf, cpu.GetV(0xF));
+            Assert.Equal((byte)0x03, cpu.GetV(0x2)); // Vy should remain unchanged
+        }
+
+        [Theory]
+        [InlineData(false, 0x02, 0x00)] // Uses Vx=0x01: 0x01 << 1 => 0x02, MSB=0
+        [InlineData(true, 0x00, 0x01)]  // Uses Vy=0x80: 0x80 << 1 => 0x00, MSB=1
+        public void SHL_ShouldRespectShiftUsesVY(bool shiftUsesVY, byte expectedV1, byte expectedVf)
+        {
+            var cpu = new TestableCpu(
+                resetCarryFlagOnBitwiseOps: true,
+                incrementIOnStoreLoadMemoryOps: false,
+                shiftUsesVY: shiftUsesVY);
+            cpu.WriteOpcode(0x200, 0x6101); // LD V1, 0x01
+            cpu.WriteOpcode(0x202, 0x6280); // LD V2, 0x80
+            cpu.WriteOpcode(0x204, 0x812E); // SHL V1 {, V2}
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal(expectedV1, cpu.GetV(0x1));
+            Assert.Equal(expectedVf, cpu.GetV(0xF));
+            Assert.Equal((byte)0x80, cpu.GetV(0x2)); // Vy should remain unchanged
         }
 
         #endregion
@@ -1403,6 +1517,32 @@ namespace Chip8Emu.Test.Core
             Assert.Equal((byte)0x55, cpu.MemoryBus.Read(0x300));
         }
 
+        [Theory]
+        [InlineData(false, 0x300)]
+        [InlineData(true, 0x303)]
+        public void STREGI_ShouldRespectIncrementIOnStoreLoadMemoryOps(bool incrementIOnStoreLoadMemoryOps, ushort expectedI)
+        {
+            var cpu = new TestableCpu(
+                resetCarryFlagOnBitwiseOps: true,
+                incrementIOnStoreLoadMemoryOps: incrementIOnStoreLoadMemoryOps);
+            cpu.WriteOpcode(0x200, 0x6011); // LD V0, 0x11
+            cpu.WriteOpcode(0x202, 0x6122); // LD V1, 0x22
+            cpu.WriteOpcode(0x204, 0x6233); // LD V2, 0x33
+            cpu.WriteOpcode(0x206, 0xA300); // LD I, 0x300
+            cpu.WriteOpcode(0x208, 0xF255); // LD [I], V2
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0x11, cpu.MemoryBus.Read(0x300));
+            Assert.Equal((byte)0x22, cpu.MemoryBus.Read(0x301));
+            Assert.Equal((byte)0x33, cpu.MemoryBus.Read(0x302));
+            Assert.Equal(expectedI, cpu.I);
+        }
+
         #endregion
 
         #region LDREGI (Fx65) - Load registers from memory Tests
@@ -1437,6 +1577,101 @@ namespace Chip8Emu.Test.Core
             cpu.Step();
 
             Assert.Equal((byte)0x77, cpu.GetV(0x0));
+        }
+
+        [Theory]
+        [InlineData(false, 0x300)]
+        [InlineData(true, 0x303)]
+        public void LDREGI_ShouldRespectIncrementIOnStoreLoadMemoryOps(bool incrementIOnStoreLoadMemoryOps, ushort expectedI)
+        {
+            var cpu = new TestableCpu(
+                resetCarryFlagOnBitwiseOps: true,
+                incrementIOnStoreLoadMemoryOps: incrementIOnStoreLoadMemoryOps);
+            cpu.MemoryBus.Write(0x300, 0xAA);
+            cpu.MemoryBus.Write(0x301, 0xBB);
+            cpu.MemoryBus.Write(0x302, 0xCC);
+            cpu.WriteOpcode(0x200, 0xA300); // LD I, 0x300
+            cpu.WriteOpcode(0x202, 0xF265); // LD V2, [I]
+
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0xAA, cpu.GetV(0x0));
+            Assert.Equal((byte)0xBB, cpu.GetV(0x1));
+            Assert.Equal((byte)0xCC, cpu.GetV(0x2));
+            Assert.Equal(expectedI, cpu.I);
+        }
+
+        #endregion
+
+        #region DRW ClipSprites Quirk Tests
+
+        [Theory]
+        [InlineData(true, 0x00, 0x00)]
+        [InlineData(false, 0x01, 0x01)]
+        public void DRW_ShouldRespectClipSprites_ForHorizontalOverflow(bool clipSprites, byte expectedWrappedPixel0, byte expectedWrappedPixel1)
+        {
+            var cpu = new TestableCpu(clipSprites: clipSprites);
+            cpu.MemoryBus.Write(0x300, 0xF0);
+            cpu.WriteOpcode(0x200, 0x603E); // LD V0, 62
+            cpu.WriteOpcode(0x202, 0x6100); // LD V1, 0
+            cpu.WriteOpcode(0x204, 0xA300); // LD I, 0x300 (test sprite row)
+            cpu.WriteOpcode(0x206, 0xD011); // DRW V0, V1, 1
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0x01, cpu.GetPixel(62, 0));
+            Assert.Equal((byte)0x01, cpu.GetPixel(63, 0));
+            Assert.Equal(expectedWrappedPixel0, cpu.GetPixel(0, 0));
+            Assert.Equal(expectedWrappedPixel1, cpu.GetPixel(1, 0));
+        }
+
+        [Theory]
+        [InlineData(true, 0x00, 0x00)]
+        [InlineData(false, 0x01, 0x01)]
+        public void DRW_ShouldRespectClipSprites_ForVerticalOverflow(bool clipSprites, byte expectedWrappedPixel0, byte expectedWrappedPixel3)
+        {
+            var cpu = new TestableCpu(clipSprites: clipSprites);
+            cpu.MemoryBus.Write(0x300, 0xF0);
+            cpu.MemoryBus.Write(0x301, 0x90);
+            cpu.WriteOpcode(0x200, 0x6000); // LD V0, 0
+            cpu.WriteOpcode(0x202, 0x611F); // LD V1, 31
+            cpu.WriteOpcode(0x204, 0xA300); // LD I, 0x300 (test sprite rows)
+            cpu.WriteOpcode(0x206, 0xD012); // DRW V0, V1, 2
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0x01, cpu.GetPixel(0, 31));
+            Assert.Equal((byte)0x01, cpu.GetPixel(3, 31));
+            Assert.Equal(expectedWrappedPixel0, cpu.GetPixel(0, 0));
+            Assert.Equal(expectedWrappedPixel3, cpu.GetPixel(3, 0));
+        }
+
+        [Theory]
+        [InlineData(true, 0x00)]
+        [InlineData(false, 0x01)]
+        public void DRW_ShouldWrapStartingCoordinates_BeforeApplyingClipBehavior(bool clipSprites, byte expectedWrappedXPixel)
+        {
+            var cpu = new TestableCpu(clipSprites: clipSprites);
+            cpu.MemoryBus.Write(0x300, 0xC0); // 1100_0000
+            cpu.WriteOpcode(0x200, 0x60FF); // LD V0, 255 -> x = 255 % 64 = 63
+            cpu.WriteOpcode(0x202, 0x617F); // LD V1, 127 -> y = 127 % 32 = 31
+            cpu.WriteOpcode(0x204, 0xA300); // LD I, 0x300
+            cpu.WriteOpcode(0x206, 0xD011); // DRW V0, V1, 1
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0x01, cpu.GetPixel(63, 31));
+            Assert.Equal(expectedWrappedXPixel, cpu.GetPixel(0, 31));
         }
 
         #endregion

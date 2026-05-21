@@ -25,14 +25,29 @@ namespace Chip8Emu.Core.Cpu
         private readonly IKeypad _keypad;
         private readonly Timers _timers;
 
+        private readonly bool _resetCarryFlagOnBitwiseOp;
+        private readonly bool _incrementIOnStoreLoadMemoryOp;
+        private readonly bool _shiftUsesVy;
+        private readonly bool _clipSprites;
+
         public Chip8Cpu(
             IMemoryBus memoryBus, 
             MemoryMap memoryMap, 
             IFrameBuffer display, 
             int randomSeed, 
             IKeypad keypad,
-            Timers timers)
+            Timers timers,
+            bool resetCarryFlagOnBitwiseOp,
+            bool incrementIOnStoreLoadMemoryOp,
+            bool shiftUsesVy,
+            bool clipSprites)
         {
+            ArgumentNullException.ThrowIfNull(memoryBus);
+            ArgumentNullException.ThrowIfNull(memoryMap);
+            ArgumentNullException.ThrowIfNull(display);
+            ArgumentNullException.ThrowIfNull(keypad);
+            ArgumentNullException.ThrowIfNull(timers);
+
             _memoryMap = memoryMap;
             _memoryBus = memoryBus;
             _display = display;
@@ -41,7 +56,11 @@ namespace Chip8Emu.Core.Cpu
             _random = new Random(randomSeed);
             _randomSeed = randomSeed;
             _keypad = keypad;
-            _timers = new Timers();
+            _timers = timers;
+            _resetCarryFlagOnBitwiseOp = resetCarryFlagOnBitwiseOp;
+            _incrementIOnStoreLoadMemoryOp = incrementIOnStoreLoadMemoryOp;
+            _shiftUsesVy = shiftUsesVy;
+            _clipSprites = clipSprites;
         }
 
         public CpuSnapshot CurrentSnapshot()
@@ -60,85 +79,145 @@ namespace Chip8Emu.Core.Cpu
             _registers.Reset(_memoryMap);
         }
 
-        public void Step()
+        public CpuStepResult Step(bool allowDraw = true)
         {
-            ushort opcode = FetchOpcode();
-            var instruction = _decoder.Decode(opcode);
-            Execute(instruction);
+            ushort opcode = ReadOpcodeAt(_registers.PC);
+            var instruction = _decoder.DecodeOrThrow(opcode);
+            if (!allowDraw && instruction.Definition.Pattern == Chip8InstructionSet.PatternDRW)
+            {
+                return new CpuStepResult(
+                    DrewSprite: false,
+                    WaitingForDrawVBlank: true);
+            }
+
+            _registers.IncrementPC();
+            var drewSprite = Execute(instruction);
+            return new CpuStepResult(
+                DrewSprite: drewSprite,
+                WaitingForDrawVBlank: false);
         }
 
-        private void Execute(Instruction op)
+        private bool Execute(DecodedInstruction instruction)
         {
-            switch(op.Opcode & 0xF000)
+            var operands = instruction.Operands;
+            var mnemonic = instruction.Definition.Mnemonic;
+
+            switch (instruction.Definition.Pattern)
             {
-                case 0x000:
-                    switch (op.Opcode)
-                    {
-                        case 0x00E0: CLS(); break;
-                        case 0x00EE: RET(); break;
-                        default: SYS(op.NNN); break;
-                    }
-                    break;
-                case 0x1000: JP(op.NNN); break;
-                case 0x2000: CALL(op.NNN); break;
-                case 0x3000: SEBYTE(op.X, op.NN); break;
-                case 0x4000: SNEBYTE(op.X, op.NN); break;
-                case 0x5000: SEREG(op.X, op.Y); break;
-                case 0x6000: LDBYTE(op.X, op.NN); break;
-                case 0x7000: ADDBYTE(op.X, op.NN); break;
-                case 0x8000:
-                    switch (op.N)
-                    {
-                        case 0x0: LDREG(op.X, op.Y); break;
-                        case 0x1: OR(op.X, op.Y); break;
-                        case 0x2: AND(op.X, op.Y); break;
-                        case 0x3: XOR(op.X, op.Y); break;
-                        case 0x4: ADDREG(op.X, op.Y); break;
-                        case 0x5: SUB(op.X, op.Y); break;
-                        case 0x6: SHR(op.X); break;
-                        case 0x7: SUBN(op.X, op.Y); break;
-                        case 0xE: SHL(op.X); break;
-                        default: throw new InvalidOperationException($"Unknown opcode: {op.Opcode:X4}");
-                    }
-                    break;
-                case 0x9000: SNEREG(op.X, op.Y); break;
-                case 0xA000: LDI(op.NNN); break;
-                case 0xB000: JPV0(op.NNN); break;
-                case 0xC000: RND(op.X, op.NN); break;
-                case 0xD000: DRW(op.X, op.Y, op.N); break;
-                case 0xE000:
-                    switch (op.NN)
-                    {
-                        case 0x9E: SKP(op.X); break;
-                        case 0xA1: SKNP(op.X); break;
-                        default: throw new InvalidOperationException($"Unknown opcode: {op.Opcode:X4}");
-                    }
-                    break;
-                case 0xF000:
-                    switch (op.NN)
-                    {
-                        case 0x07: LDDT(op.X); break;
-                        case 0x0A: LDK(op.X); break;
-                        case 0x15: STDT(op.X); break;
-                        case 0x18: STST(op.X); break;
-                        case 0x1E: ADDI(op.X); break;
-                        case 0x29: LDFNT(op.X); break;
-                        case 0x33: LDBCD(op.X); break;
-                        case 0x55: STREGI(op.X); break;
-                        case 0x65: LDREGI(op.X); break;
-                        default: throw new InvalidOperationException($"Unknown opcode: {op.Opcode:X4}");
-                    }
-                    break;
+                case Chip8InstructionSet.PatternCLS:
+                    CLS();
+                    return false;
+                case Chip8InstructionSet.PatternRET:
+                    RET();
+                    return false;
+                case Chip8InstructionSet.PatternSYS:
+                    SYS(operands.RequireNNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternJP:
+                    JP(operands.RequireNNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternCALL:
+                    CALL(operands.RequireNNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSEByte:
+                    SEBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSNEByte:
+                    SNEBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSEReg:
+                    SEREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternLDByte:
+                    LDBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternADDByte:
+                    ADDBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternLDReg:
+                    LDREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternOR:
+                    OR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternAND:
+                    AND(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternXOR:
+                    XOR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternADDReg:
+                    ADDREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSUB:
+                    SUB(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSHR:
+                    SHR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSUBN:
+                    SUBN(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSHL:
+                    SHL(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSNEReg:
+                    SNEREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternLDI:
+                    LDI(operands.RequireNNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternJPV0:
+                    JPV0(operands.RequireNNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternRND:
+                    RND(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternDRW:
+                    DRW(operands.RequireX(mnemonic), operands.RequireY(mnemonic), operands.RequireN(mnemonic));
+                    return true;
+                case Chip8InstructionSet.PatternSKP:
+                    SKP(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSKNP:
+                    SKNP(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternLDDT:
+                    LDDT(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternLDK:
+                    LDK(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSTDT:
+                    STDT(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSTST:
+                    STST(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternADDI:
+                    ADDI(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternLDFNT:
+                    LDFNT(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternLDBCD:
+                    LDBCD(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternSTREGI:
+                    STREGI(operands.RequireX(mnemonic));
+                    return false;
+                case Chip8InstructionSet.PatternLDREGI:
+                    LDREGI(operands.RequireX(mnemonic));
+                    return false;
+                default:
+                    throw new InvalidOperationException($"Unknown opcode pattern: {instruction.Opcode:X4}");
             }
         }
 
-        private ushort FetchOpcode()
+        private ushort ReadOpcodeAt(ushort pc)
         {
-            byte highByte = _memoryBus.Read(_registers.PC);
-            byte lowByte = _memoryBus.Read((ushort)(_registers.PC + 1));
-
-            _registers.IncrementPC();
-
+            byte highByte = _memoryBus.Read(pc);
+            byte lowByte = _memoryBus.Read((ushort)(pc + 1));
             return (ushort)((highByte << 8) | lowByte);
         }
 
@@ -235,6 +314,10 @@ namespace Chip8Emu.Core.Cpu
         {
             var res = _registers.GetV(x) | _registers.GetV(y);
             _registers.SetV(x, (byte)res);
+            if (_resetCarryFlagOnBitwiseOp)
+            {
+                _registers.SetV(0xF, 0);
+            }
         }
 
         // 8xy2 - AND Vx, Vy
@@ -242,6 +325,10 @@ namespace Chip8Emu.Core.Cpu
         {
             var res = _registers.GetV(x) & _registers.GetV(y);
             _registers.SetV(x, (byte)res);
+            if (_resetCarryFlagOnBitwiseOp)
+            {
+                _registers.SetV(0xF, 0);
+            }
         }
 
         // 8xy3 - XOR Vx, Vy
@@ -249,6 +336,10 @@ namespace Chip8Emu.Core.Cpu
         {
             var res = _registers.GetV(x) ^ _registers.GetV(y);
             _registers.SetV(x, (byte)res);
+            if (_resetCarryFlagOnBitwiseOp)
+            {
+                _registers.SetV(0xF, 0);
+            }
         }
 
         // 8xy4 - ADD Vx, Vy
@@ -265,7 +356,8 @@ namespace Chip8Emu.Core.Cpu
         // 8xy5 - SUB Vx, Vy
         private void SUB(byte x, byte y)
         {
-            var borrow = _registers.GetV(x) > _registers.GetV(y) ? 1 : 0;
+            // VF is set when no borrow occurs (Vx >= Vy).
+            var borrow = _registers.GetV(x) >= _registers.GetV(y) ? 1 : 0;
 
             // TODO validate negative handling
             var res = (byte)(_registers.GetV(x) - _registers.GetV(y));
@@ -275,8 +367,12 @@ namespace Chip8Emu.Core.Cpu
         }
 
         // 8xy6 - SHR Vx {, Vy}
-        private void SHR(byte x)
+        private void SHR(byte x, byte y)
         {
+            if (_shiftUsesVy)
+            {
+                _registers.SetV(x, _registers.GetV(y));
+            }
             var lsb = (byte)(_registers.GetV(x) & 0x1);
             _registers.SetV(x, (byte)(_registers.GetV(x) >> 1));
             _registers.SetV(0xF, lsb);
@@ -286,7 +382,8 @@ namespace Chip8Emu.Core.Cpu
         // 8xy7 - SUBN Vx, Vy
         private void SUBN(byte x, byte y)
         {
-            var borrow = _registers.GetV(y) > _registers.GetV(x) ? 1 : 0;
+            // VF is set when no borrow occurs (Vy >= Vx).
+            var borrow = _registers.GetV(y) >= _registers.GetV(x) ? 1 : 0;
             var res = (byte)(_registers.GetV(y) - _registers.GetV(x));
             _registers.SetV(x, res);
             _registers.SetV(0xF, (byte)borrow);
@@ -294,9 +391,12 @@ namespace Chip8Emu.Core.Cpu
         }
 
         // 8xyE - SHL Vx {, Vy}
-        private void SHL(byte x)
+        private void SHL(byte x, byte y)
         {
-            // TODO validate behavior
+            if(_shiftUsesVy)
+            {
+                _registers.SetV(x, _registers.GetV(y));
+            }
             var msb = (byte)((_registers.GetV(x) & 0x80) >> 7);
 
             var val = (byte)(_registers.GetV(x));
@@ -305,7 +405,7 @@ namespace Chip8Emu.Core.Cpu
                 val = (byte)(val & 0x7F);
             }
 
-            _registers.SetV(x, val);
+            _registers.SetV(x, (byte)(val << 1));
             _registers.SetV(0xF, msb);
              return;
         }
@@ -347,6 +447,11 @@ namespace Chip8Emu.Core.Cpu
         // Dxyn - DRW Vx, Vy, nibble
         private void DRW(byte x, byte y, byte n)
         {
+            _registers.SetV(0xF, 0);
+
+            var baseX = _registers.GetV(x) % _display.Width;
+            var baseY = _registers.GetV(y) % _display.Height;
+
             byte[] spriteDate = new byte[n];
             for (int i = 0; i < n; i++)
             {
@@ -355,13 +460,25 @@ namespace Chip8Emu.Core.Cpu
 
             for(int row = 0; row < n; row++)
             {
+                var targetY = baseY + row;
+                if (_clipSprites && targetY >= _display.Height)
+                {
+                    continue;
+                }
+
                 byte spritRow = spriteDate[row];
                 for(int col = 0; col < 8; col++)
                 {
                     bool pixelOn = (spritRow & (0x80 >> col)) != 0;
                     if (pixelOn)
                     {
-                        bool erased = _display.XorPixel((byte)(_registers.GetV(x) + col), (byte)(_registers.GetV(y) + row));
+                        var targetX = baseX + col;
+                        if (_clipSprites && targetX >= _display.Width)
+                        {
+                            continue;
+                        }
+
+                        bool erased = _display.XorPixel(targetX, targetY);
                         if (erased)
                         {
                             _registers.SetV(0xF, 1);
@@ -468,7 +585,11 @@ namespace Chip8Emu.Core.Cpu
             {
                 _memoryBus.Write((ushort)(_registers.I + i), _registers.GetV((byte)i));
             }
-             return;
+            if(_incrementIOnStoreLoadMemoryOp)
+            {
+                _registers.SetI((ushort)(_registers.I + x + 1));
+            }
+            return;
         }
 
         // Fx65 - LD Vx, [I]
@@ -478,7 +599,11 @@ namespace Chip8Emu.Core.Cpu
             {
                 _registers.SetV((byte)i, _memoryBus.Read((ushort)(_registers.I + i)));
             }
-             return;
+            if (_incrementIOnStoreLoadMemoryOp)
+            {
+                _registers.SetI((ushort)(_registers.I + x + 1));
+            }
+            return;
         }
     }
 }

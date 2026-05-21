@@ -12,7 +12,7 @@ namespace Chip8Emu.Core.Input
         
 
 
-        public bool IsPressed(byte key) => _keys[key * 0xF];
+        public bool IsPressed(byte key) => _keys[key & 0xF];
 
         public byte? FirstPressedKey
         {

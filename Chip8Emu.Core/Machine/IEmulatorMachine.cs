@@ -18,7 +18,14 @@ namespace Chip8Emu.Core.Machine
 
         void SetKeyState(byte key, bool isPressed);
 
+        /// <summary>
+        /// Executes exactly one instruction. Timer cadence is instruction-dependent in this mode.
+        /// </summary>
         void StepInstruction();
+        /// <summary>
+        /// Executes up to <see cref="EmulationOptions.InstructionsPerFrame"/> instructions for one frame.
+        /// Timer cadence is frame-dependent in this mode.
+        /// </summary>
         void StepFrame();
     }
 }
