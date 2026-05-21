@@ -29,6 +29,7 @@ namespace Chip8Emu.Core.Cpu
         private readonly bool _incrementIOnStoreLoadMemoryOp;
         private readonly bool _shiftUsesVy;
         private readonly bool _clipSprites;
+        private readonly bool _jumpWithV0;
 
         public Chip8Cpu(
             IMemoryBus memoryBus, 
@@ -40,7 +41,8 @@ namespace Chip8Emu.Core.Cpu
             bool resetCarryFlagOnBitwiseOp,
             bool incrementIOnStoreLoadMemoryOp,
             bool shiftUsesVy,
-            bool clipSprites)
+            bool clipSprites,
+            bool jumpWithV0)
         {
             ArgumentNullException.ThrowIfNull(memoryBus);
             ArgumentNullException.ThrowIfNull(memoryMap);
@@ -61,6 +63,7 @@ namespace Chip8Emu.Core.Cpu
             _incrementIOnStoreLoadMemoryOp = incrementIOnStoreLoadMemoryOp;
             _shiftUsesVy = shiftUsesVy;
             _clipSprites = clipSprites;
+            _jumpWithV0 = jumpWithV0;
         }
 
         public CpuSnapshot CurrentSnapshot()
@@ -109,6 +112,12 @@ namespace Chip8Emu.Core.Cpu
                     return false;
                 case Chip8InstructionSet.PatternRET:
                     RET();
+                    return false;
+                case Chip8InstructionSet.PatternLOW:
+                    LOW();
+                    return false;
+                case Chip8InstructionSet.PatternHIGH:
+                    HIGH();
                     return false;
                 case Chip8InstructionSet.PatternSYS:
                     SYS(operands.RequireNNN(mnemonic));
@@ -168,7 +177,7 @@ namespace Chip8Emu.Core.Cpu
                     LDI(operands.RequireNNN(mnemonic));
                     return false;
                 case Chip8InstructionSet.PatternJPV0:
-                    JPV0(operands.RequireNNN(mnemonic));
+                    JPBase(operands.RequireNNN(mnemonic));
                     return false;
                 case Chip8InstructionSet.PatternRND:
                     RND(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
@@ -233,6 +242,18 @@ namespace Chip8Emu.Core.Cpu
         {
             _display.Clear();
             return;
+        }
+
+        // 00FE - LOW
+        private void LOW()
+        {
+            _display.SetResolution(64, 32);
+        }
+
+        // 00FF - HIGH
+        private void HIGH()
+        {
+            _display.SetResolution(128, 64);
         }
 
         // 00EE - RET
@@ -427,10 +448,13 @@ namespace Chip8Emu.Core.Cpu
             return;
         }
 
-        // Bnnn - JP V0, addr
-        private void JPV0(ushort nnn)
+        // Bnnn - JP V0/Vx, addr
+        private void JPBase(ushort nnn)
         {
-            var target = (ushort)(nnn + _registers.GetV(0));
+            var baseRegister = _jumpWithV0
+                ? (byte)0
+                : (byte)((nnn & 0x0F00) >> 8);
+            var target = (ushort)(nnn + _registers.GetV(baseRegister));
             _registers.SetPC(target);
              return;
         }
@@ -451,14 +475,17 @@ namespace Chip8Emu.Core.Cpu
 
             var baseX = _registers.GetV(x) % _display.Width;
             var baseY = _registers.GetV(y) % _display.Height;
+            var spriteWidth = n == 0 && _display.Width == 128 && _display.Height == 64 ? 16 : 8;
+            var spriteHeight = n == 0 && spriteWidth == 16 ? 16 : n;
+            var bytesPerRow = spriteWidth / 8;
 
-            byte[] spriteDate = new byte[n];
-            for (int i = 0; i < n; i++)
+            byte[] spriteData = new byte[spriteHeight * bytesPerRow];
+            for (int i = 0; i < spriteData.Length; i++)
             {
-                spriteDate[i] = _memoryBus.Read((ushort)(_registers.I + i));
+                spriteData[i] = _memoryBus.Read((ushort)(_registers.I + i));
             }
 
-            for(int row = 0; row < n; row++)
+            for(int row = 0; row < spriteHeight; row++)
             {
                 var targetY = baseY + row;
                 if (_clipSprites && targetY >= _display.Height)
@@ -466,10 +493,10 @@ namespace Chip8Emu.Core.Cpu
                     continue;
                 }
 
-                byte spritRow = spriteDate[row];
-                for(int col = 0; col < 8; col++)
+                for(int col = 0; col < spriteWidth; col++)
                 {
-                    bool pixelOn = (spritRow & (0x80 >> col)) != 0;
+                    var spriteByte = spriteData[(row * bytesPerRow) + (col / 8)];
+                    bool pixelOn = (spriteByte & (0x80 >> (col % 8))) != 0;
                     if (pixelOn)
                     {
                         var targetX = baseX + col;

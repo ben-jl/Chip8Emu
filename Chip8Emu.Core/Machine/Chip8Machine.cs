@@ -47,7 +47,8 @@ namespace Chip8Emu.Core.Machine
                 _options.ResetCarryFlagOnBitwiseOps,
                 _options.IncrementIOnStoreLoadMemoryOps,
                 _options.ShiftUsesVy,
-                _options.ClipSprites);
+                _options.ClipSprites,
+                _options.JumpWithV0);
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
 
@@ -87,7 +88,7 @@ namespace Chip8Emu.Core.Machine
             var drewSpriteThisFrame = false;
             for(var i = 0; i < instructionBudget; i++)
             {
-                var allowDraw = !_options.DisplayWaitOnDraw || !drewSpriteThisFrame;
+                var allowDraw = !ShouldWaitForDraw() || !drewSpriteThisFrame;
                 var stepResult = _cpu.Step(allowDraw);
                 if (stepResult.WaitingForDrawVBlank)
                 {
@@ -102,6 +103,22 @@ namespace Chip8Emu.Core.Machine
             // Frame stepping uses frame cadence for timers.
             _timers.Tick();
             _instructionsSinceLastTimerTick = 0;
+        }
+
+        private bool ShouldWaitForDraw()
+        {
+            if (!_options.DisplayWaitOnDraw)
+            {
+                return false;
+            }
+
+            return _options.DisplayWaitScope switch
+            {
+                DisplayWaitScope.AllDisplayModes => true,
+                DisplayWaitScope.LowResolutionOnly => _display.Width == 64 && _display.Height == 32,
+                DisplayWaitScope.HighResolutionOnly => _display.Width == 128 && _display.Height == 64,
+                _ => true
+            };
         }
 
         /// <summary>

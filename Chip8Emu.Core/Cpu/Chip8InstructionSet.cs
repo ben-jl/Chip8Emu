@@ -7,6 +7,8 @@ namespace Chip8Emu.Core.Cpu
     {
         public const ushort PatternCLS = 0x00E0;
         public const ushort PatternRET = 0x00EE;
+        public const ushort PatternLOW = 0x00FE;
+        public const ushort PatternHIGH = 0x00FF;
         public const ushort PatternSYS = 0x0000;
         public const ushort PatternJP = 0x1000;
         public const ushort PatternCALL = 0x2000;
@@ -51,6 +53,8 @@ namespace Chip8Emu.Core.Cpu
             {
                 new("CLS", 0xFFFF, PatternCLS, OperandPattern.None, EncodeNone(PatternCLS), DecodeNone()),
                 new("RET", 0xFFFF, PatternRET, OperandPattern.None, EncodeNone(PatternRET), DecodeNone()),
+                new("LOW", 0xFFFF, PatternLOW, OperandPattern.None, EncodeNone(PatternLOW), DecodeNone()),
+                new("HIGH", 0xFFFF, PatternHIGH, OperandPattern.None, EncodeNone(PatternHIGH), DecodeNone()),
                 new("SYS", 0xF000, PatternSYS, OperandPattern.Address, EncodeAddress("SYS", PatternSYS), DecodeAddress()),
                 new("JP", 0xF000, PatternJP, OperandPattern.Address, EncodeAddress("JP", PatternJP), DecodeAddress()),
                 new("CALL", 0xF000, PatternCALL, OperandPattern.Address, EncodeAddress("CALL", PatternCALL), DecodeAddress()),

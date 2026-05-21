@@ -11,11 +11,12 @@ namespace Chip8Emu.Test.Core
 
             Assert.Equal(10, options.InstructionsPerFrame);
             Assert.False(options.ShiftUsesVy);
-            Assert.False(options.JumpWithV0);
+            Assert.True(options.JumpWithV0);
             Assert.True(options.ClipSprites);
             Assert.True(options.ResetCarryFlagOnBitwiseOps);
             Assert.False(options.IncrementIOnStoreLoadMemoryOps);
             Assert.False(options.DisplayWaitOnDraw);
+            Assert.Equal(DisplayWaitScope.AllDisplayModes, options.DisplayWaitScope);
         }
 
         [Fact]

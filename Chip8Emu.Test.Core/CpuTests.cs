@@ -27,7 +27,8 @@ namespace Chip8Emu.Test.Core
                 bool resetCarryFlagOnBitwiseOps = true, 
                 bool incrementIOnStoreLoadMemoryOps = false,
                 bool shiftUsesVY = false,
-                bool clipSprites = true)
+                bool clipSprites = true,
+                bool jumpWithV0 = true)
             {
                 var memoryMap = new MemoryMap();
                 _memoryBus = new MemoryBus(memoryMap.MemorySize);
@@ -42,7 +43,8 @@ namespace Chip8Emu.Test.Core
                     resetCarryFlagOnBitwiseOps,
                     incrementIOnStoreLoadMemoryOps,
                     shiftUsesVY,
-                    clipSprites);
+                    clipSprites,
+                    jumpWithV0);
                 
                 // Use reflection to access private _registers field
                 var registersField = typeof(Chip8Cpu).GetField("_registers", 
@@ -1407,6 +1409,36 @@ namespace Chip8Emu.Test.Core
             cpu.Step();
 
             Assert.Equal(expectedPC, cpu.PC);
+        }
+
+        [Fact]
+        public void JPV0_ShouldUseVxFromAddressHighNibble_WhenJumpWithV0IsDisabled()
+        {
+            var cpu = new TestableCpu(jumpWithV0: false);
+            cpu.WriteOpcode(0x200, 0x6004); // LD V0, 0x04
+            cpu.WriteOpcode(0x202, 0x6208); // LD V2, 0x08
+            cpu.WriteOpcode(0x204, 0xB208); // JP 0x208 + V2
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((ushort)0x210, cpu.PC);
+        }
+
+        [Fact]
+        public void JPV0_ShouldStillUseV0_WhenJumpWithV0IsEnabled()
+        {
+            var cpu = new TestableCpu(jumpWithV0: true);
+            cpu.WriteOpcode(0x200, 0x6004); // LD V0, 0x04
+            cpu.WriteOpcode(0x202, 0x6208); // LD V2, 0x08
+            cpu.WriteOpcode(0x204, 0xB208); // JP 0x208 + V0
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((ushort)0x20C, cpu.PC);
         }
 
         #endregion
