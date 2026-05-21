@@ -16,7 +16,11 @@ namespace Chip8Emu.Core.Machine
         public int InstructionsPerFrame { get; init; } = 10;
 
         public bool ShiftUsesVy { get ; init; } = false;
-        public bool JumpWithV0 { get; init; } = false;
+        /// <summary>
+        /// When true, BNNN jumps to NNN + V0. When false, BNNN jumps to NNN + VX,
+        /// where X is the high nibble of NNN, matching the common Super-CHIP behavior.
+        /// </summary>
+        public bool JumpWithV0 { get; init; } = true;
         public bool ClipSprites { get; init; } = true;
         public bool ResetCarryFlagOnBitwiseOps { get; init; } = true;
         public bool IncrementIOnStoreLoadMemoryOps { get; init; } = false;
@@ -28,6 +32,11 @@ namespace Chip8Emu.Core.Machine
         /// instruction stepping ticks based on instruction cadence.
         /// </summary>
         public bool DisplayWaitOnDraw { get; init; } = false;
+
+        /// <summary>
+        /// Selects which display resolutions are gated when <see cref="DisplayWaitOnDraw"/> is enabled.
+        /// </summary>
+        public DisplayWaitScope DisplayWaitScope { get; init; } = DisplayWaitScope.AllDisplayModes;
 
         public int RandomSeed { get; init; } = Environment.TickCount;
     }

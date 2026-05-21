@@ -8,18 +8,16 @@ namespace Chip8Emu.Core.Display
 {
     public sealed class MonochromeFrameBuffer : IFrameBuffer
     {
-        private readonly byte[] _buffer;
+        private byte[] _buffer = Array.Empty<byte>();
 
-        public int Width { get; }
-        public int Height { get; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
 
         public ReadOnlySpan<byte> Buffer => _buffer;
 
         public MonochromeFrameBuffer(int width, int height)
         {
-            Width = width;
-            Height = height;
-            _buffer = new byte[width * height];
+            SetResolution(width, height);
         }
 
         public bool XorPixel(int x, int y)
@@ -38,6 +36,16 @@ namespace Chip8Emu.Core.Display
         public void Clear()
         {
             Array.Clear(_buffer);
+        }
+
+        public void SetResolution(int width, int height)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+            Width = width;
+            Height = height;
+            _buffer = new byte[width * height];
         }
     }
 }

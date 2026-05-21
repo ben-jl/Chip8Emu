@@ -50,6 +50,32 @@ namespace Chip8Emu.Test.Core
             Assert.True(frameBuffer.Buffer.ToArray().All(pixel => pixel == 0));
         }
 
+        [Fact]
+        public void SetResolution_ShouldResizeAndClearBuffer()
+        {
+            var frameBuffer = new MonochromeFrameBuffer(64, 32);
+            frameBuffer.XorPixel(1, 1);
+
+            frameBuffer.SetResolution(128, 64);
+
+            Assert.Equal(128, frameBuffer.Width);
+            Assert.Equal(64, frameBuffer.Height);
+            Assert.Equal(128 * 64, frameBuffer.Buffer.Length);
+            Assert.True(frameBuffer.Buffer.ToArray().All(pixel => pixel == 0));
+        }
+
+        [Theory]
+        [InlineData(0, 32)]
+        [InlineData(64, 0)]
+        [InlineData(-1, 32)]
+        [InlineData(64, -1)]
+        public void SetResolution_ShouldThrowForNonPositiveDimensions(int width, int height)
+        {
+            var frameBuffer = new MonochromeFrameBuffer(64, 32);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => frameBuffer.SetResolution(width, height));
+        }
+
         [Theory]
         [InlineData(-1, 0)]
         [InlineData(0, -1)]

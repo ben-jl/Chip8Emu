@@ -63,6 +63,24 @@ namespace Chip8Emu.Test.Core
             Assert.Equal((ushort)0x123, valid.Instruction.Operands.NNN);
         }
 
+        [Theory]
+        [InlineData(0x00FE, Chip8InstructionSet.PatternLOW, "LOW")]
+        [InlineData(0x00FF, Chip8InstructionSet.PatternHIGH, "HIGH")]
+        public void Decode_ShouldResolveSuperChipDisplayModeInstructions(
+            ushort opcode,
+            ushort expectedPattern,
+            string expectedMnemonic)
+        {
+            var decoder = CreateDecoder();
+
+            var result = decoder.Decode(opcode);
+
+            var valid = Assert.IsType<InstructionDecodeResult.Valid>(result);
+            Assert.Equal(expectedPattern, valid.Instruction.Definition.Pattern);
+            Assert.Equal(expectedMnemonic, valid.Instruction.Definition.Mnemonic);
+            Assert.Equal(DecodedOperands.Empty, valid.Instruction.Operands);
+        }
+
         [Fact]
         public void Decode_ShouldReturnInvalid_ForUnknownOpcode()
         {
@@ -105,6 +123,8 @@ namespace Chip8Emu.Test.Core
             var testCases = new (ushort Pattern, ParsedOperands Operands, ushort ExpectedOpcode)[]
             {
                 (Chip8InstructionSet.PatternCLS, new ParsedOperands(), 0x00E0),
+                (Chip8InstructionSet.PatternLOW, new ParsedOperands(), 0x00FE),
+                (Chip8InstructionSet.PatternHIGH, new ParsedOperands(), 0x00FF),
                 (Chip8InstructionSet.PatternJP, new ParsedOperands(NNN: 0x234), 0x1234),
                 (Chip8InstructionSet.PatternSEByte, new ParsedOperands(X: 0xA, NN: 0x42), 0x3A42),
                 (Chip8InstructionSet.PatternSEReg, new ParsedOperands(X: 0xA, Y: 0xB), 0x5AB0),

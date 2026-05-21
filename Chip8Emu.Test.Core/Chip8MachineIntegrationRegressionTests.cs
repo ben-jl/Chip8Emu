@@ -282,6 +282,210 @@ namespace Chip8Emu.Test.Core
         }
 
         [Fact]
+        public void LowAndHighInstructions_ShouldSwitchDisplayResolutionAndClearDisplay()
+        {
+            var machine = new Chip8Machine(new EmulationOptions { RandomSeed = 1234 });
+
+            machine.LoadRom([
+                0xD0, 0x05, // DRW V0, V0, 5
+                0x00, 0xFF, // HIGH
+                0x00, 0xFE  // LOW
+            ]);
+
+            machine.StepInstruction();
+            Assert.Contains((byte)1, machine.Display.Buffer.ToArray());
+
+            machine.StepInstruction();
+            Assert.Equal(128, machine.Display.Width);
+            Assert.Equal(64, machine.Display.Height);
+            Assert.Equal(128 * 64, machine.Display.Buffer.Length);
+            Assert.True(machine.Display.Buffer.ToArray().All(pixel => pixel == 0));
+
+            machine.StepInstruction();
+            Assert.Equal(64, machine.Display.Width);
+            Assert.Equal(32, machine.Display.Height);
+            Assert.Equal(64 * 32, machine.Display.Buffer.Length);
+            Assert.True(machine.Display.Buffer.ToArray().All(pixel => pixel == 0));
+        }
+
+        [Fact]
+        public void HighResolutionDrawWithZeroHeight_ShouldDrawAndCollideAs16By16Sprite()
+        {
+            var machine = new Chip8Machine(new EmulationOptions { RandomSeed = 1234 });
+
+            machine.LoadRom([
+                0x00, 0xFF, // HIGH
+                0xA2, 0x08, // LD I, 0x208
+                0xD0, 0x00, // DRW V0, V0, 0
+                0xD0, 0x00, // DRW V0, V0, 0
+                0x80, 0x01, // row 0: x 0 and x 15
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x00, 0x00,
+                0x40, 0x02  // row 15: x 1 and x 14
+            ]);
+
+            machine.StepInstruction();
+            machine.StepInstruction();
+            machine.StepInstruction();
+
+            var afterFirstDraw = machine.CurrentSnapshot();
+            Assert.Equal((byte)0, afterFirstDraw.Cpu.V[0xF]);
+            Assert.Equal((byte)1, machine.Display.Buffer[0]);
+            Assert.Equal((byte)1, machine.Display.Buffer[15]);
+            Assert.Equal((byte)1, machine.Display.Buffer[(15 * 128) + 1]);
+            Assert.Equal((byte)1, machine.Display.Buffer[(15 * 128) + 14]);
+
+            machine.StepInstruction();
+
+            var afterSecondDraw = machine.CurrentSnapshot();
+            Assert.Equal((byte)1, afterSecondDraw.Cpu.V[0xF]);
+            Assert.Equal((byte)0, machine.Display.Buffer[0]);
+            Assert.Equal((byte)0, machine.Display.Buffer[15]);
+            Assert.Equal((byte)0, machine.Display.Buffer[(15 * 128) + 1]);
+            Assert.Equal((byte)0, machine.Display.Buffer[(15 * 128) + 14]);
+        }
+
+        [Fact]
+        public void DisplayWaitScope_ShouldBlockHighResolutionDraws_WhenAllDisplayModesAreSelected()
+        {
+            var machine = new Chip8Machine(new EmulationOptions
+            {
+                InstructionsPerFrame = 10,
+                DisplayWaitOnDraw = true,
+                DisplayWaitScope = DisplayWaitScope.AllDisplayModes,
+                RandomSeed = 1234
+            });
+
+            machine.LoadRom([
+                0x00, 0xFF, // HIGH
+                0xA2, 0x10, // LD I, 0x210
+                0xD0, 0x00, // DRW V0, V0, 0
+                0x61, 0x01, // LD V1, 0x01
+                0xD0, 0x00, // DRW V0, V0, 0
+                0x62, 0x02, // LD V2, 0x02
+                0x12, 0x0C, // JP 0x20C
+                0x00, 0x00,
+                0x80, 0x00
+            ]);
+
+            machine.StepFrame();
+
+            var snapshot = machine.CurrentSnapshot();
+            Assert.Equal((ushort)0x208, snapshot.Cpu.PC);
+            Assert.Equal((byte)0x01, snapshot.Cpu.V[1]);
+            Assert.Equal((byte)0x00, snapshot.Cpu.V[2]);
+            Assert.Equal(128, machine.Display.Width);
+            Assert.Equal(64, machine.Display.Height);
+        }
+
+        [Fact]
+        public void DisplayWaitScope_ShouldNotBlockHighResolutionDraws_WhenOnlyLowResolutionIsSelected()
+        {
+            var machine = new Chip8Machine(new EmulationOptions
+            {
+                InstructionsPerFrame = 6,
+                DisplayWaitOnDraw = true,
+                DisplayWaitScope = DisplayWaitScope.LowResolutionOnly,
+                RandomSeed = 1234
+            });
+
+            machine.LoadRom([
+                0x00, 0xFF, // HIGH
+                0xA2, 0x10, // LD I, 0x210
+                0xD0, 0x00, // DRW V0, V0, 0
+                0x61, 0x01, // LD V1, 0x01
+                0xD0, 0x00, // DRW V0, V0, 0
+                0x62, 0x02, // LD V2, 0x02
+                0x12, 0x0C, // JP 0x20C
+                0x00, 0x00,
+                0x80, 0x00
+            ]);
+
+            machine.StepFrame();
+
+            var snapshot = machine.CurrentSnapshot();
+            Assert.Equal((ushort)0x20C, snapshot.Cpu.PC);
+            Assert.Equal((byte)0x01, snapshot.Cpu.V[1]);
+            Assert.Equal((byte)0x02, snapshot.Cpu.V[2]);
+            Assert.Equal(128, machine.Display.Width);
+            Assert.Equal(64, machine.Display.Height);
+        }
+
+        [Fact]
+        public void DisplayWaitScope_ShouldNotBlockLowResolutionDraws_WhenOnlyHighResolutionIsSelected()
+        {
+            var machine = new Chip8Machine(new EmulationOptions
+            {
+                InstructionsPerFrame = 6,
+                DisplayWaitOnDraw = true,
+                DisplayWaitScope = DisplayWaitScope.HighResolutionOnly,
+                RandomSeed = 1234
+            });
+
+            machine.LoadRom([
+                0xD0, 0x05, // DRW V0, V0, 5
+                0x61, 0x01, // LD V1, 0x01
+                0xD0, 0x05, // DRW V0, V0, 5
+                0x62, 0x02, // LD V2, 0x02
+                0x12, 0x08  // JP 0x208
+            ]);
+
+            machine.StepFrame();
+
+            var snapshot = machine.CurrentSnapshot();
+            Assert.Equal((ushort)0x208, snapshot.Cpu.PC);
+            Assert.Equal((byte)0x01, snapshot.Cpu.V[1]);
+            Assert.Equal((byte)0x02, snapshot.Cpu.V[2]);
+            Assert.Equal(64, machine.Display.Width);
+            Assert.Equal(32, machine.Display.Height);
+        }
+
+        [Fact]
+        public void DisplayWaitScope_ShouldBlockHighResolutionDraws_WhenOnlyHighResolutionIsSelected()
+        {
+            var machine = new Chip8Machine(new EmulationOptions
+            {
+                InstructionsPerFrame = 10,
+                DisplayWaitOnDraw = true,
+                DisplayWaitScope = DisplayWaitScope.HighResolutionOnly,
+                RandomSeed = 1234
+            });
+
+            machine.LoadRom([
+                0x00, 0xFF, // HIGH
+                0xA2, 0x10, // LD I, 0x210
+                0xD0, 0x00, // DRW V0, V0, 0
+                0x61, 0x01, // LD V1, 0x01
+                0xD0, 0x00, // DRW V0, V0, 0
+                0x62, 0x02, // LD V2, 0x02
+                0x12, 0x0C, // JP 0x20C
+                0x00, 0x00,
+                0x80, 0x00
+            ]);
+
+            machine.StepFrame();
+
+            var snapshot = machine.CurrentSnapshot();
+            Assert.Equal((ushort)0x208, snapshot.Cpu.PC);
+            Assert.Equal((byte)0x01, snapshot.Cpu.V[1]);
+            Assert.Equal((byte)0x00, snapshot.Cpu.V[2]);
+            Assert.Equal(128, machine.Display.Width);
+            Assert.Equal(64, machine.Display.Height);
+        }
+
+        [Fact]
         public void SoundEnabled_ShouldTrackCurrentSoundTimerValue()
         {
             var machine = new Chip8Machine(new EmulationOptions
@@ -399,14 +603,12 @@ namespace Chip8Emu.Test.Core
             Assert.Equal((ushort)0x200, machine.CurrentSnapshot().Cpu.PC);
         }
 
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void JumpWithV0Option_ShouldNotChangeCurrentBnnnBehavior(bool jumpWithV0)
+        [Fact]
+        public void JumpWithV0Option_ShouldUseV0ForBnnnWhenEnabled()
         {
             var machine = new Chip8Machine(new EmulationOptions
             {
-                JumpWithV0 = jumpWithV0,
+                JumpWithV0 = true,
                 RandomSeed = 1234
             });
 
@@ -420,6 +622,35 @@ namespace Chip8Emu.Test.Core
                 0x61, 0x42  // target at 0x20C
             ]);
 
+            machine.StepInstruction();
+            machine.StepInstruction();
+            machine.StepInstruction();
+
+            var snapshot = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x42, snapshot.Cpu.V[1]);
+            Assert.Equal((ushort)0x20E, snapshot.Cpu.PC);
+        }
+
+        [Fact]
+        public void JumpWithV0Option_ShouldUseVxFromAddressHighNibbleForBnnnWhenDisabled()
+        {
+            var machine = new Chip8Machine(new EmulationOptions
+            {
+                JumpWithV0 = false,
+                RandomSeed = 1234
+            });
+
+            machine.LoadRom([
+                0x60, 0x04, // LD V0, 0x04
+                0x62, 0x08, // LD V2, 0x08
+                0xB2, 0x04, // JP 0x204 + V2
+                0x61, 0xEE, // skipped
+                0x61, 0xEE, // skipped
+                0x61, 0xEE, // skipped
+                0x61, 0x42  // target at 0x20C
+            ]);
+
+            machine.StepInstruction();
             machine.StepInstruction();
             machine.StepInstruction();
             machine.StepInstruction();

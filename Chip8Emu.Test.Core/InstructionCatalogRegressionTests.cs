@@ -10,6 +10,8 @@ namespace Chip8Emu.Test.Core
             {
                 { "CLS", 0xFFFF, Chip8InstructionSet.PatternCLS, OperandPattern.None },
                 { "RET", 0xFFFF, Chip8InstructionSet.PatternRET, OperandPattern.None },
+                { "LOW", 0xFFFF, Chip8InstructionSet.PatternLOW, OperandPattern.None },
+                { "HIGH", 0xFFFF, Chip8InstructionSet.PatternHIGH, OperandPattern.None },
                 { "SYS", 0xF000, Chip8InstructionSet.PatternSYS, OperandPattern.Address },
                 { "JP", 0xF000, Chip8InstructionSet.PatternJP, OperandPattern.Address },
                 { "CALL", 0xF000, Chip8InstructionSet.PatternCALL, OperandPattern.Address },
