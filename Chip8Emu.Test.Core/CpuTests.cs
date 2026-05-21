@@ -1,4 +1,4 @@
-﻿using Chip8Emu.Core.Cpu;
+using Chip8Emu.Core.Cpu;
 using Chip8Emu.Core.Display;
 using Chip8Emu.Core.Input;
 using Chip8Emu.Core.Memory;
@@ -21,24 +21,28 @@ namespace Chip8Emu.Test.Core
             private readonly Chip8Cpu _cpu;
             private readonly TestableRegisters _registers;
             private readonly MemoryBus _memoryBus;
+            private readonly MonochromeFrameBuffer _display;
 
             public TestableCpu(
                 bool resetCarryFlagOnBitwiseOps = true, 
                 bool incrementIOnStoreLoadMemoryOps = false,
-                bool shiftUsesVY = false)
+                bool shiftUsesVY = false,
+                bool clipSprites = true)
             {
                 var memoryMap = new MemoryMap();
                 _memoryBus = new MemoryBus(memoryMap.MemorySize);
+                _display = new MonochromeFrameBuffer(64, 32);
                 _cpu = new Chip8Cpu(
                     _memoryBus, 
                     memoryMap, 
-                    new MonochromeFrameBuffer(64, 32), 
+                    _display, 
                     randomSeed: 12345, 
                     new KeypadState(),
                     new Chip8Emu.Core.Timing.Timers(),
                     resetCarryFlagOnBitwiseOps,
                     incrementIOnStoreLoadMemoryOps,
-                    shiftUsesVY);
+                    shiftUsesVY,
+                    clipSprites);
                 
                 // Use reflection to access private _registers field
                 var registersField = typeof(Chip8Cpu).GetField("_registers", 
@@ -54,6 +58,7 @@ namespace Chip8Emu.Test.Core
             public ushort PC => _registers.PC;
             public ushort I => _registers.I;
             public byte GetV(byte register) => _registers.GetV(register);
+            public byte GetPixel(int x, int y) => _display.Buffer[y * _display.Width + x];
 
             public void WriteOpcode(ushort address, ushort opcode)
             {
@@ -1595,6 +1600,78 @@ namespace Chip8Emu.Test.Core
             Assert.Equal((byte)0xBB, cpu.GetV(0x1));
             Assert.Equal((byte)0xCC, cpu.GetV(0x2));
             Assert.Equal(expectedI, cpu.I);
+        }
+
+        #endregion
+
+        #region DRW ClipSprites Quirk Tests
+
+        [Theory]
+        [InlineData(true, 0x00, 0x00)]
+        [InlineData(false, 0x01, 0x01)]
+        public void DRW_ShouldRespectClipSprites_ForHorizontalOverflow(bool clipSprites, byte expectedWrappedPixel0, byte expectedWrappedPixel1)
+        {
+            var cpu = new TestableCpu(clipSprites: clipSprites);
+            cpu.MemoryBus.Write(0x300, 0xF0);
+            cpu.WriteOpcode(0x200, 0x603E); // LD V0, 62
+            cpu.WriteOpcode(0x202, 0x6100); // LD V1, 0
+            cpu.WriteOpcode(0x204, 0xA300); // LD I, 0x300 (test sprite row)
+            cpu.WriteOpcode(0x206, 0xD011); // DRW V0, V1, 1
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0x01, cpu.GetPixel(62, 0));
+            Assert.Equal((byte)0x01, cpu.GetPixel(63, 0));
+            Assert.Equal(expectedWrappedPixel0, cpu.GetPixel(0, 0));
+            Assert.Equal(expectedWrappedPixel1, cpu.GetPixel(1, 0));
+        }
+
+        [Theory]
+        [InlineData(true, 0x00, 0x00)]
+        [InlineData(false, 0x01, 0x01)]
+        public void DRW_ShouldRespectClipSprites_ForVerticalOverflow(bool clipSprites, byte expectedWrappedPixel0, byte expectedWrappedPixel3)
+        {
+            var cpu = new TestableCpu(clipSprites: clipSprites);
+            cpu.MemoryBus.Write(0x300, 0xF0);
+            cpu.MemoryBus.Write(0x301, 0x90);
+            cpu.WriteOpcode(0x200, 0x6000); // LD V0, 0
+            cpu.WriteOpcode(0x202, 0x611F); // LD V1, 31
+            cpu.WriteOpcode(0x204, 0xA300); // LD I, 0x300 (test sprite rows)
+            cpu.WriteOpcode(0x206, 0xD012); // DRW V0, V1, 2
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0x01, cpu.GetPixel(0, 31));
+            Assert.Equal((byte)0x01, cpu.GetPixel(3, 31));
+            Assert.Equal(expectedWrappedPixel0, cpu.GetPixel(0, 0));
+            Assert.Equal(expectedWrappedPixel3, cpu.GetPixel(3, 0));
+        }
+
+        [Theory]
+        [InlineData(true, 0x00)]
+        [InlineData(false, 0x01)]
+        public void DRW_ShouldWrapStartingCoordinates_BeforeApplyingClipBehavior(bool clipSprites, byte expectedWrappedXPixel)
+        {
+            var cpu = new TestableCpu(clipSprites: clipSprites);
+            cpu.MemoryBus.Write(0x300, 0xC0); // 1100_0000
+            cpu.WriteOpcode(0x200, 0x60FF); // LD V0, 255 -> x = 255 % 64 = 63
+            cpu.WriteOpcode(0x202, 0x617F); // LD V1, 127 -> y = 127 % 32 = 31
+            cpu.WriteOpcode(0x204, 0xA300); // LD I, 0x300
+            cpu.WriteOpcode(0x206, 0xD011); // DRW V0, V1, 1
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal((byte)0x01, cpu.GetPixel(63, 31));
+            Assert.Equal(expectedWrappedXPixel, cpu.GetPixel(0, 31));
         }
 
         #endregion

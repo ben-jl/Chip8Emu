@@ -1,4 +1,4 @@
-﻿using Chip8Emu.Core.Cpu;
+using Chip8Emu.Core.Cpu;
 using Chip8Emu.Core.Diagnostics;
 using Chip8Emu.Core.Display;
 using Chip8Emu.Core.Input;
@@ -46,7 +46,8 @@ namespace Chip8Emu.Core.Machine
                 _timers,
                 _options.ResetCarryFlagOnBitwiseOps,
                 _options.IncrementIOnStoreLoadMemoryOps,
-                _options.ShiftUsesVy);
+                _options.ShiftUsesVy,
+                _options.ClipSprites);
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
 

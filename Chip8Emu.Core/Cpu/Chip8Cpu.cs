@@ -28,6 +28,7 @@ namespace Chip8Emu.Core.Cpu
         private readonly bool _resetCarryFlagOnBitwiseOp;
         private readonly bool _incrementIOnStoreLoadMemoryOp;
         private readonly bool _shiftUsesVy;
+        private readonly bool _clipSprites;
 
         public Chip8Cpu(
             IMemoryBus memoryBus, 
@@ -38,7 +39,8 @@ namespace Chip8Emu.Core.Cpu
             Timers timers,
             bool resetCarryFlagOnBitwiseOp,
             bool incrementIOnStoreLoadMemoryOp,
-            bool shiftUsesVy)
+            bool shiftUsesVy,
+            bool clipSprites)
         {
             ArgumentNullException.ThrowIfNull(memoryBus);
             ArgumentNullException.ThrowIfNull(memoryMap);
@@ -58,6 +60,7 @@ namespace Chip8Emu.Core.Cpu
             _resetCarryFlagOnBitwiseOp = resetCarryFlagOnBitwiseOp;
             _incrementIOnStoreLoadMemoryOp = incrementIOnStoreLoadMemoryOp;
             _shiftUsesVy = shiftUsesVy;
+            _clipSprites = clipSprites;
         }
 
         public CpuSnapshot CurrentSnapshot()
@@ -434,6 +437,11 @@ namespace Chip8Emu.Core.Cpu
         // Dxyn - DRW Vx, Vy, nibble
         private void DRW(byte x, byte y, byte n)
         {
+            _registers.SetV(0xF, 0);
+
+            var baseX = _registers.GetV(x) % _display.Width;
+            var baseY = _registers.GetV(y) % _display.Height;
+
             byte[] spriteDate = new byte[n];
             for (int i = 0; i < n; i++)
             {
@@ -442,13 +450,25 @@ namespace Chip8Emu.Core.Cpu
 
             for(int row = 0; row < n; row++)
             {
+                var targetY = baseY + row;
+                if (_clipSprites && targetY >= _display.Height)
+                {
+                    continue;
+                }
+
                 byte spritRow = spriteDate[row];
                 for(int col = 0; col < 8; col++)
                 {
                     bool pixelOn = (spritRow & (0x80 >> col)) != 0;
                     if (pixelOn)
                     {
-                        bool erased = _display.XorPixel((byte)(_registers.GetV(x) + col), (byte)(_registers.GetV(y) + row));
+                        var targetX = baseX + col;
+                        if (_clipSprites && targetX >= _display.Width)
+                        {
+                            continue;
+                        }
+
+                        bool erased = _display.XorPixel(targetX, targetY);
                         if (erased)
                         {
                             _registers.SetV(0xF, 1);
