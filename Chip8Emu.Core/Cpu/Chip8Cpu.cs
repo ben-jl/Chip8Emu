@@ -1,6 +1,8 @@
 ﻿using Chip8Emu.Core.Diagnostics;
 using Chip8Emu.Core.Display;
+using Chip8Emu.Core.Input;
 using Chip8Emu.Core.Memory;
+using Chip8Emu.Core.Timing;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,14 +19,29 @@ namespace Chip8Emu.Core.Cpu
         private readonly IMemoryBus _memoryBus;
         private readonly InstructionDecoder _decoder;
         private readonly IFrameBuffer _display;
+        private readonly Random _random;
+        private readonly int _randomSeed;
+        private int _randomCount = 0;
+        private readonly IKeypad _keypad;
+        private readonly Timers _timers;
 
-        public Chip8Cpu(IMemoryBus memoryBus, MemoryMap memoryMap, IFrameBuffer display)
+        public Chip8Cpu(
+            IMemoryBus memoryBus, 
+            MemoryMap memoryMap, 
+            IFrameBuffer display, 
+            int randomSeed, 
+            IKeypad keypad,
+            Timers timers)
         {
             _memoryMap = memoryMap;
             _memoryBus = memoryBus;
             _display = display;
             _registers = new Registers(memoryMap);
             _decoder = new InstructionDecoder();
+            _random = new Random(randomSeed);
+            _randomSeed = randomSeed;
+            _keypad = keypad;
+            _timers = new Timers();
         }
 
         public CpuSnapshot CurrentSnapshot()
@@ -32,7 +49,9 @@ namespace Chip8Emu.Core.Cpu
             return new CpuSnapshot(
                 _registers.PC,
                 _registers.I,
-                _registers.GetRegisterSnapshot()
+                _registers.GetRegisterSnapshot(),
+                _randomSeed,
+                _randomCount
                 );
         }
 
@@ -319,8 +338,10 @@ namespace Chip8Emu.Core.Cpu
         // Cxkk - RND Vx, byte
         private void RND(byte x, byte kk)
         {
-            // TODO implement with seed
-            throw new NotImplementedException();
+            var value = (byte)(_random.Next(0, 256) & kk);
+            _registers.SetV(x, value);
+            _randomCount++;
+            return;
         }
 
         // Dxyn - DRW Vx, Vy, nibble
@@ -355,37 +376,58 @@ namespace Chip8Emu.Core.Cpu
         // ExE9E - SKP Vx
         private void SKP(byte x)
         {
-            throw new NotImplementedException();
+            if(_keypad.IsPressed(_registers.GetV(x)))
+            {
+                _registers.IncrementPC();
+            }
+             return;
         }
 
         // ExA1 - SKNP Vx
         private void SKNP(byte x)
         {
-            throw new NotImplementedException();
+            if(!_keypad.IsPressed(_registers.GetV(x)))
+            {
+                _registers.IncrementPC();
+            }
+             return;
         }
 
         // Fx07 - LD Vx, DT
         private void LDDT(byte x)
         {
-            throw new NotImplementedException();
+            _registers.SetV(x, _timers.DelayTimer);
+             return;
         }
 
         // Fx0A - LD Vx, K
         private void LDK(byte x)
         {
-            throw new NotImplementedException();
+            var key = _keypad.FirstPressedKey;
+            if (key.HasValue)
+            {
+                _registers.SetV(x, key.Value);
+            }
+             else
+             {
+                 // repeat this instruction until a key is pressed
+                 _registers.DecrementPC();
+             }
+             return;
         }
 
         // Fx15 - LD DT, Vx
         private void STDT(byte x)
         {
-            throw new NotImplementedException();
+            _timers.DelayTimer = _registers.GetV(x);
+             return;
         }
 
         // Fx18 - LD ST, Vx
         private void STST(byte x)
         {
-            throw new NotImplementedException();
+            _timers.SoundTimer = _registers.GetV(x);
+             return;
         }
 
         // Fx1E - ADD I, Vx

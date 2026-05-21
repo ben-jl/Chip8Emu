@@ -82,7 +82,8 @@ internal static class Program
 
         machine.LoadRom([
             0x60, 0x01, // LD V0, 1
-            0xD0, 0x05, // DRW V0, V0, 5 ; Should be the zero sprite
+            0xA0, 0x0A, // LD I, 0x00A (location of the two sprite)
+            0xD0, 0x05, // DRW V0, V0, 5 ; Should be the two sprite
             0x12, 0x00  // JP 0x200 ; Loop indefinitely
             ]);
 

@@ -89,6 +89,15 @@ namespace Chip8Emu.Core.Cpu
             PC += offset;
         }
 
+        public void DecrementPC(ushort offset = 2)
+        {
+            if (PC < offset)
+            {
+                throw new InvalidOperationException("Program counter underflow: cannot decrement below zero.");
+            }
+            PC -= offset;
+        }
+
         public void SetPC(ushort address)
         {
             PC = address;
