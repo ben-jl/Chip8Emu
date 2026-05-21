@@ -357,7 +357,7 @@ namespace Chip8Emu.Core.Cpu
                 val = (byte)(val & 0x7F);
             }
 
-            _registers.SetV(x, val);
+            _registers.SetV(x, (byte)(val << 1));
             _registers.SetV(0xF, msb);
              return;
         }

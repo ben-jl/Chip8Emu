@@ -91,13 +91,18 @@ internal static class Program
     {
         var machine = new Chip8Machine();
 
-        machine.LoadRom([
-            0xF0, 0x0A, // wait for keypress and store in V0
-//            0x60, 0x01, // LD V0, 1
-            0xA0, 0x0A, // LD I, 0x00A (location of the two sprite)
-            0xD0, 0x05, // DRW V0, V0, 5 ; Should be the two sprite
-            0x12, 0x04  // JP 0x204 ; Loop indefinitely without redrawing
-            ]);
+        //var testRomPath = "C:\\Users\\blevalley\\Downloads\\1-chip8-logo (1).ch8";
+        //var testRomPath = "C:\\Users\\blevalley\\Downloads\\2-ibm-logo.ch8";
+        var testRomPath = "C:\\Users\\blevalley\\Downloads\\3-corax+.ch8";
+        var bytes = File.ReadAllBytes(testRomPath);
+        machine.LoadRom(bytes);
+//        machine.LoadRom([
+//            0xF0, 0x0A, // wait for keypress and store in V0
+////            0x60, 0x01, // LD V0, 1
+//            0xA0, 0x0A, // LD I, 0x00A (location of the two sprite)
+//            0xD0, 0x05, // DRW V0, V0, 5 ; Should be the two sprite
+//            0x12, 0x04  // JP 0x204 ; Loop indefinitely without redrawing
+//            ]);
 
         return machine;
     }
