@@ -4,6 +4,17 @@ namespace Chip8Emu.Test.Core
 {
     public class MemoryMapTests
     {
+        [Fact]
+        public void Constructor_ShouldLockCurrentMemoryLayout()
+        {
+            var memoryMap = new MemoryMap();
+
+            Assert.Equal((ushort)0x200, memoryMap.RomStart);
+            Assert.Equal((ushort)0x000, memoryMap.FontStart);
+            Assert.Equal((ushort)0x005, memoryMap.FontSize);
+            Assert.Equal((ushort)4096, memoryMap.MemorySize);
+        }
+
         [Theory]
         [InlineData(0x0, 0x0)]
         [InlineData(0x1, 0x5)]
@@ -26,6 +37,17 @@ namespace Chip8Emu.Test.Core
             var memoryMap = new MemoryMap();
             var address = memoryMap.GetFontAddress(character);
             Assert.Equal(expectedAddress, address);
+        }
+
+        [Theory]
+        [InlineData(0x10)]
+        [InlineData(0xFFFF)]
+        public void GetFontAddress_InvalidCharacter_ShouldThrow(ushort character)
+        {
+            var memoryMap = new MemoryMap();
+
+            var exception = Assert.Throws<ArgumentOutOfRangeException>(() => memoryMap.GetFontAddress(character));
+            Assert.Equal("character", exception.ParamName);
         }
     }
 }

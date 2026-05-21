@@ -30,6 +30,62 @@ namespace Chip8Emu.Test.Core
         }
 
         [Fact]
+        public void Constructor_ShouldInitializeMemoryToZero()
+        {
+            var memoryBus = new MemoryBus(16);
+
+            for (ushort address = 0; address < 16; address++)
+            {
+                Assert.Equal((byte)0, memoryBus.Read(address));
+            }
+        }
+
+        [Fact]
+        public void Clear_ShouldResetWrittenMemoryToZero()
+        {
+            var memoryBus = new MemoryBus(16);
+            memoryBus.Write(0, 0xAA);
+            memoryBus.Write(15, 0xBB);
+
+            memoryBus.Clear();
+
+            Assert.Equal((byte)0, memoryBus.Read(0));
+            Assert.Equal((byte)0, memoryBus.Read(15));
+        }
+
+        [Fact]
+        public void WriteBlock_ShouldAllowExactFitAtEndOfMemory()
+        {
+            var memoryBus = new MemoryBus(4);
+
+            memoryBus.WriteBlock(2, [0xAA, 0xBB]);
+
+            Assert.Equal((byte)0xAA, memoryBus.Read(2));
+            Assert.Equal((byte)0xBB, memoryBus.Read(3));
+        }
+
+        [Fact]
+        public void WriteBlock_ShouldAllowEmptyBlockAtMemoryEnd()
+        {
+            var memoryBus = new MemoryBus(4);
+
+            memoryBus.WriteBlock(4, []);
+
+            Assert.Equal((byte)0, memoryBus.Read(0));
+            Assert.Equal((byte)0, memoryBus.Read(3));
+        }
+
+        [Fact]
+        public void ReadAndWrite_ShouldAllowLastValidAddress()
+        {
+            var memoryBus = new MemoryBus(4);
+
+            memoryBus.Write(3, 0xCC);
+
+            Assert.Equal((byte)0xCC, memoryBus.Read(3));
+        }
+
+        [Fact]
         public void Read_ShouldThrowException_WhenAddressOutOfBounds()
         {
             var memoryBus = new MemoryBus(4096);
