@@ -63,72 +63,124 @@ namespace Chip8Emu.Core.Cpu
         public void Step()
         {
             ushort opcode = FetchOpcode();
-            var instruction = _decoder.Decode(opcode);
+            var instruction = _decoder.DecodeOrThrow(opcode);
             Execute(instruction);
         }
 
-        private void Execute(Instruction op)
+        private void Execute(DecodedInstruction instruction)
         {
-            switch(op.Opcode & 0xF000)
+            var operands = instruction.Operands;
+            var mnemonic = instruction.Definition.Mnemonic;
+
+            switch (instruction.Definition.Pattern)
             {
-                case 0x000:
-                    switch (op.Opcode)
-                    {
-                        case 0x00E0: CLS(); break;
-                        case 0x00EE: RET(); break;
-                        default: SYS(op.NNN); break;
-                    }
+                case Chip8InstructionSet.PatternCLS:
+                    CLS();
                     break;
-                case 0x1000: JP(op.NNN); break;
-                case 0x2000: CALL(op.NNN); break;
-                case 0x3000: SEBYTE(op.X, op.NN); break;
-                case 0x4000: SNEBYTE(op.X, op.NN); break;
-                case 0x5000: SEREG(op.X, op.Y); break;
-                case 0x6000: LDBYTE(op.X, op.NN); break;
-                case 0x7000: ADDBYTE(op.X, op.NN); break;
-                case 0x8000:
-                    switch (op.N)
-                    {
-                        case 0x0: LDREG(op.X, op.Y); break;
-                        case 0x1: OR(op.X, op.Y); break;
-                        case 0x2: AND(op.X, op.Y); break;
-                        case 0x3: XOR(op.X, op.Y); break;
-                        case 0x4: ADDREG(op.X, op.Y); break;
-                        case 0x5: SUB(op.X, op.Y); break;
-                        case 0x6: SHR(op.X); break;
-                        case 0x7: SUBN(op.X, op.Y); break;
-                        case 0xE: SHL(op.X); break;
-                        default: throw new InvalidOperationException($"Unknown opcode: {op.Opcode:X4}");
-                    }
+                case Chip8InstructionSet.PatternRET:
+                    RET();
                     break;
-                case 0x9000: SNEREG(op.X, op.Y); break;
-                case 0xA000: LDI(op.NNN); break;
-                case 0xB000: JPV0(op.NNN); break;
-                case 0xC000: RND(op.X, op.NN); break;
-                case 0xD000: DRW(op.X, op.Y, op.N); break;
-                case 0xE000:
-                    switch (op.NN)
-                    {
-                        case 0x9E: SKP(op.X); break;
-                        case 0xA1: SKNP(op.X); break;
-                        default: throw new InvalidOperationException($"Unknown opcode: {op.Opcode:X4}");
-                    }
+                case Chip8InstructionSet.PatternSYS:
+                    SYS(operands.RequireNNN(mnemonic));
                     break;
-                case 0xF000:
-                    switch (op.NN)
-                    {
-                        case 0x07: LDDT(op.X); break;
-                        case 0x0A: LDK(op.X); break;
-                        case 0x15: STDT(op.X); break;
-                        case 0x18: STST(op.X); break;
-                        case 0x1E: ADDI(op.X); break;
-                        case 0x29: LDFNT(op.X); break;
-                        case 0x33: LDBCD(op.X); break;
-                        case 0x55: STREGI(op.X); break;
-                        case 0x65: LDREGI(op.X); break;
-                        default: throw new InvalidOperationException($"Unknown opcode: {op.Opcode:X4}");
-                    }
+                case Chip8InstructionSet.PatternJP:
+                    JP(operands.RequireNNN(mnemonic));
                     break;
+                case Chip8InstructionSet.PatternCALL:
+                    CALL(operands.RequireNNN(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSEByte:
+                    SEBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSNEByte:
+                    SNEBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSEReg:
+                    SEREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternLDByte:
+                    LDBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternADDByte:
+                    ADDBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternLDReg:
+                    LDREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternOR:
+                    OR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternAND:
+                    AND(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternXOR:
+                    XOR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternADDReg:
+                    ADDREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSUB:
+                    SUB(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSHR:
+                    SHR(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSUBN:
+                    SUBN(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSHL:
+                    SHL(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSNEReg:
+                    SNEREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternLDI:
+                    LDI(operands.RequireNNN(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternJPV0:
+                    JPV0(operands.RequireNNN(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternRND:
+                    RND(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternDRW:
+                    DRW(operands.RequireX(mnemonic), operands.RequireY(mnemonic), operands.RequireN(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSKP:
+                    SKP(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSKNP:
+                    SKNP(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternLDDT:
+                    LDDT(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternLDK:
+                    LDK(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSTDT:
+                    STDT(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSTST:
+                    STST(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternADDI:
+                    ADDI(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternLDFNT:
+                    LDFNT(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternLDBCD:
+                    LDBCD(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternSTREGI:
+                    STREGI(operands.RequireX(mnemonic));
+                    break;
+                case Chip8InstructionSet.PatternLDREGI:
+                    LDREGI(operands.RequireX(mnemonic));
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown opcode pattern: {instruction.Opcode:X4}");
             }
         }
 
