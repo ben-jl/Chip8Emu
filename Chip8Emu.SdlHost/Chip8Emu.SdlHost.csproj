@@ -5,6 +5,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+	 
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,5 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Chip8Emu.Core\Chip8Emu.Core.csproj" />
   </ItemGroup>
-
+	<PropertyGroup>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
 </Project>

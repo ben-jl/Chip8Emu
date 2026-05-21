@@ -1,4 +1,5 @@
-﻿using Chip8Emu.Core.Machine;
+﻿using Chip8.SdlHost;
+using Chip8Emu.Core.Machine;
 using SDL3;
 using System.Reflection.PortableExecutable;
 
@@ -16,7 +17,7 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
-        if (!SDL.Init(SDL.InitFlags.Video))
+        if (!SDL.Init(SDL.InitFlags.Video | SDL.InitFlags.Audio))
         {
             Console.WriteLine($"Failed to initialize SDL: {SDL.GetError()}");
             return;
@@ -36,6 +37,7 @@ internal static class Program
         }
 
         var frameBufferRenderer = new SdlFramebufferRenderer(renderer, Scale);
+        using var audio = new SdlBeepAudio();
         var machine = GetTestMachine();
 
         var running = true;
@@ -43,19 +45,28 @@ internal static class Program
         {
             while (SDL.PollEvent(out var sdlEvent))
             {
-                if((SDL.EventType)sdlEvent.Type == SDL.EventType.Quit)
+                var eventType = (SDL.EventType)sdlEvent.Type;
+
+                if (eventType == SDL.EventType.Quit)
                 {
                     running = false;
+                    continue;
                 }
 
-                frameBufferRenderer.Render(
-                    machine.Display.Buffer,
-                    Chip8Width,
-                    Chip8Height);
-
-                SDL.Delay(16); // Roughly 60 FPS
-                machine.StepFrame();
+                SdlInput.HandleEvent(sdlEvent, machine);
             }
+
+            machine.StepFrame();
+
+            audio.SetEnabled(machine.SoundEnabled);
+            audio.Update();
+
+            frameBufferRenderer.Render(
+                machine.Display.Buffer,
+                Chip8Width,
+                Chip8Height);
+
+            SDL.Delay(16); // Roughly 60 FPS
         }
 
         SDL.DestroyRenderer(renderer);
@@ -81,10 +92,11 @@ internal static class Program
         var machine = new Chip8Machine();
 
         machine.LoadRom([
-            0x60, 0x01, // LD V0, 1
+            0xF0, 0x0A, // wait for keypress and store in V0
+//            0x60, 0x01, // LD V0, 1
             0xA0, 0x0A, // LD I, 0x00A (location of the two sprite)
             0xD0, 0x05, // DRW V0, V0, 5 ; Should be the two sprite
-            0x12, 0x00  // JP 0x200 ; Loop indefinitely
+            0x12, 0x04  // JP 0x204 ; Loop indefinitely without redrawing
             ]);
 
         return machine;

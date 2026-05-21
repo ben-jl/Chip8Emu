@@ -31,7 +31,7 @@ namespace Chip8Emu.Core.Input
 
         public void SetKey(byte key, bool pressed)
         {
-            _keys[key * 0xF] = pressed;
+            _keys[key & 0xF] = pressed;
         }
 
         public void Clear()
