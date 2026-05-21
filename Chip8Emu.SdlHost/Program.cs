@@ -89,7 +89,11 @@ internal static class Program
 
     private static Chip8Machine GetTestMachine()
     {
-        var machine = new Chip8Machine();
+        var emuOptions = new EmulationOptions()
+        {
+            IncrementIOnStoreLoadMemoryOps = true
+        };
+        var machine = new Chip8Machine(emuOptions);
 
         //var testRomPath = "C:\\Users\\blevalley\\Downloads\\1-chip8-logo (1).ch8";
         //var testRomPath = "C:\\Users\\blevalley\\Downloads\\2-ibm-logo.ch8";

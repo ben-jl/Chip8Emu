@@ -13,10 +13,10 @@ namespace Chip8Emu.Core.Machine
         public int InstructionsPerFrame { get; init; } = 10;
 
         public bool ShiftUsesVy { get ; init; } = false;
-        public bool LoadStoreIncrementI { get; init; } = true;
         public bool JumpWithV0 { get; init; } = false;
         public bool ClipSprites { get; init; } = true;
         public bool ResetCarryFlagOnBitwiseOps { get; init; } = true;
+        public bool IncrementIOnStoreLoadMemoryOps { get; init; } = false;
 
         public int RandomSeed { get; init; } = Environment.TickCount;
     }

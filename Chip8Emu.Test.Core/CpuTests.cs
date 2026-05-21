@@ -22,7 +22,7 @@ namespace Chip8Emu.Test.Core
             private readonly TestableRegisters _registers;
             private readonly MemoryBus _memoryBus;
 
-            public TestableCpu()
+            public TestableCpu(bool resetCarryFlagOnBitwiseOps = true, bool incrementIOnStoreLoadMemoryOps = false)
             {
                 var memoryMap = new MemoryMap();
                 _memoryBus = new MemoryBus(memoryMap.MemorySize);
@@ -33,7 +33,8 @@ namespace Chip8Emu.Test.Core
                     randomSeed: 12345, 
                     new KeypadState(),
                     new Chip8Emu.Core.Timing.Timers(),
-                    true);
+                    resetCarryFlagOnBitwiseOps,
+                    incrementIOnStoreLoadMemoryOps);
                 
                 // Use reflection to access private _registers field
                 var registersField = typeof(Chip8Cpu).GetField("_registers", 
@@ -1124,6 +1125,61 @@ namespace Chip8Emu.Test.Core
             cpu.Step();
 
             Assert.Equal(expected, cpu.GetV(0x1));
+        }
+
+        #endregion
+
+        #region Bitwise VF Quirk (COSMAC) Tests
+
+        [Theory]
+        [InlineData(true, 0x8121, 0x00)] // OR V1, V2
+        [InlineData(true, 0x8122, 0x00)] // AND V1, V2
+        [InlineData(true, 0x8123, 0x00)] // XOR V1, V2
+        [InlineData(false, 0x8121, 0x01)] // OR V1, V2
+        [InlineData(false, 0x8122, 0x01)] // AND V1, V2
+        [InlineData(false, 0x8123, 0x01)] // XOR V1, V2
+        public void BitwiseOps_ShouldRespectResetCarryFlagOnBitwiseOps(bool resetCarryFlagOnBitwiseOps, ushort bitwiseOpcode, byte expectedVf)
+        {
+            var cpu = new TestableCpu(resetCarryFlagOnBitwiseOps);
+            cpu.WriteOpcode(0x200, 0x6F01); // LD VF, 0x01
+            cpu.WriteOpcode(0x202, 0x61AA); // LD V1, 0xAA
+            cpu.WriteOpcode(0x204, 0x6255); // LD V2, 0x55
+            cpu.WriteOpcode(0x206, bitwiseOpcode);
+
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+            cpu.Step();
+
+            Assert.Equal(expectedVf, cpu.GetV(0xF));
+        }
+
+        [Theory]
+        [InlineData(0x8121, 0xBE)] // OR 0xAA, 0x14
+        [InlineData(0x8122, 0x00)] // AND 0xAA, 0x14
+        [InlineData(0x8123, 0xBE)] // XOR 0xAA, 0x14
+        public void BitwiseOps_ShouldNotChangeResult_WhenResetCarryFlagOnBitwiseOpsToggles(ushort bitwiseOpcode, byte expectedVx)
+        {
+            var cpuWithReset = new TestableCpu(true);
+            cpuWithReset.WriteOpcode(0x200, 0x61AA); // LD V1, 0xAA
+            cpuWithReset.WriteOpcode(0x202, 0x6214); // LD V2, 0x14
+            cpuWithReset.WriteOpcode(0x204, bitwiseOpcode);
+
+            cpuWithReset.Step();
+            cpuWithReset.Step();
+            cpuWithReset.Step();
+
+            var cpuWithoutReset = new TestableCpu(false);
+            cpuWithoutReset.WriteOpcode(0x200, 0x61AA); // LD V1, 0xAA
+            cpuWithoutReset.WriteOpcode(0x202, 0x6214); // LD V2, 0x14
+            cpuWithoutReset.WriteOpcode(0x204, bitwiseOpcode);
+
+            cpuWithoutReset.Step();
+            cpuWithoutReset.Step();
+            cpuWithoutReset.Step();
+
+            Assert.Equal(expectedVx, cpuWithReset.GetV(0x1));
+            Assert.Equal(expectedVx, cpuWithoutReset.GetV(0x1));
         }
 
         #endregion

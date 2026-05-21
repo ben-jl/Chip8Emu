@@ -25,7 +25,8 @@ namespace Chip8Emu.Core.Cpu
         private readonly IKeypad _keypad;
         private readonly Timers _timers;
 
-        private bool _resetCarryFlagOnBitwiseOp;
+        private readonly bool _resetCarryFlagOnBitwiseOp;
+        private readonly bool _incrementIOnStoreLoadMemoryOp;
 
         public Chip8Cpu(
             IMemoryBus memoryBus, 
@@ -34,7 +35,8 @@ namespace Chip8Emu.Core.Cpu
             int randomSeed, 
             IKeypad keypad,
             Timers timers,
-            bool resetCarryFlagOnBitwiseOp)
+            bool resetCarryFlagOnBitwiseOp,
+            bool incrementIOnStoreLoadMemoryOp)
         {
             ArgumentNullException.ThrowIfNull(memoryBus);
             ArgumentNullException.ThrowIfNull(memoryMap);
@@ -52,6 +54,7 @@ namespace Chip8Emu.Core.Cpu
             _keypad = keypad;
             _timers = timers;
             _resetCarryFlagOnBitwiseOp = resetCarryFlagOnBitwiseOp;
+            _incrementIOnStoreLoadMemoryOp = incrementIOnStoreLoadMemoryOp;
         }
 
         public CpuSnapshot CurrentSnapshot()
@@ -542,7 +545,11 @@ namespace Chip8Emu.Core.Cpu
             {
                 _memoryBus.Write((ushort)(_registers.I + i), _registers.GetV((byte)i));
             }
-             return;
+            if(_incrementIOnStoreLoadMemoryOp)
+            {
+                _registers.SetI((ushort)(_registers.I + x + 1));
+            }
+            return;
         }
 
         // Fx65 - LD Vx, [I]
@@ -552,7 +559,11 @@ namespace Chip8Emu.Core.Cpu
             {
                 _registers.SetV((byte)i, _memoryBus.Read((ushort)(_registers.I + i)));
             }
-             return;
+            if (_incrementIOnStoreLoadMemoryOp)
+            {
+                _registers.SetI((ushort)(_registers.I + x + 1));
+            }
+            return;
         }
     }
 }
