@@ -23,6 +23,7 @@ namespace Chip8Emu.Core.Machine
         private readonly MemoryMap _memoryMap;
 
         private readonly EmulationOptions _options;
+        private int _instructionsSinceLastTimerTick;
 
         public Chip8Machine() : this(null)
         {
@@ -36,7 +37,14 @@ namespace Chip8Emu.Core.Machine
             _memoryMap = new MemoryMap();
             _display = new MonochromeFrameBuffer(64, 32);
             _keypad = new KeypadState();
-            _cpu = new Chip8Cpu(_memory, _memoryMap, _display, _options.RandomSeed, _keypad, _timers);
+            _cpu = new Chip8Cpu(
+                _memory, 
+                _memoryMap, 
+                _display, 
+                _options.RandomSeed, 
+                _keypad, 
+                _timers,
+                _options.ResetCarryFlagOnBitwiseOps);
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
 
@@ -57,6 +65,7 @@ namespace Chip8Emu.Core.Machine
             _keypad.Clear();
             _timers.Reset();
             _cpu.Reset();
+            _instructionsSinceLastTimerTick = 0;
 
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
@@ -72,13 +81,19 @@ namespace Chip8Emu.Core.Machine
             {
                 StepInstruction();
             }
-
-            _timers.Tick();
         }
 
         public void StepInstruction()
         {
             _cpu.Step();
+            _instructionsSinceLastTimerTick++;
+
+            var tickInterval = Math.Max(1, _options.InstructionsPerFrame);
+            if (_instructionsSinceLastTimerTick >= tickInterval)
+            {
+                _timers.Tick();
+                _instructionsSinceLastTimerTick = 0;
+            }
         }
 
         public MachineSnapshot CurrentSnapshot()

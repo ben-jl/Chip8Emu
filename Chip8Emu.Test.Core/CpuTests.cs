@@ -32,7 +32,8 @@ namespace Chip8Emu.Test.Core
                     new MonochromeFrameBuffer(64, 32), 
                     randomSeed: 12345, 
                     new KeypadState(),
-                    new Chip8Emu.Core.Timing.Timers());
+                    new Chip8Emu.Core.Timing.Timers(),
+                    true);
                 
                 // Use reflection to access private _registers field
                 var registersField = typeof(Chip8Cpu).GetField("_registers", 
@@ -1224,9 +1225,9 @@ namespace Chip8Emu.Test.Core
         #region SHL (8xyE) - Shift left Tests
 
         [Theory]
-        [InlineData(0x01, 0x01, 0)]
+        [InlineData(0x01, 0x02, 0)]
         [InlineData(0x80, 0x00, 1)]
-        [InlineData(0xFF, 0x7F, 1)]
+        [InlineData(0xFF, 0xFE, 1)]
         [InlineData(0x00, 0x00, 0)]
         public void SHL_ShouldShiftLeftAndSetMSB(byte vxValue, byte expectedResult, byte expectedMSB)
         {

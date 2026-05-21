@@ -25,14 +25,23 @@ namespace Chip8Emu.Core.Cpu
         private readonly IKeypad _keypad;
         private readonly Timers _timers;
 
+        private bool _resetCarryFlagOnBitwiseOp;
+
         public Chip8Cpu(
             IMemoryBus memoryBus, 
             MemoryMap memoryMap, 
             IFrameBuffer display, 
             int randomSeed, 
             IKeypad keypad,
-            Timers timers)
+            Timers timers,
+            bool resetCarryFlagOnBitwiseOp)
         {
+            ArgumentNullException.ThrowIfNull(memoryBus);
+            ArgumentNullException.ThrowIfNull(memoryMap);
+            ArgumentNullException.ThrowIfNull(display);
+            ArgumentNullException.ThrowIfNull(keypad);
+            ArgumentNullException.ThrowIfNull(timers);
+
             _memoryMap = memoryMap;
             _memoryBus = memoryBus;
             _display = display;
@@ -41,7 +50,8 @@ namespace Chip8Emu.Core.Cpu
             _random = new Random(randomSeed);
             _randomSeed = randomSeed;
             _keypad = keypad;
-            _timers = new Timers();
+            _timers = timers;
+            _resetCarryFlagOnBitwiseOp = resetCarryFlagOnBitwiseOp;
         }
 
         public CpuSnapshot CurrentSnapshot()
@@ -287,6 +297,10 @@ namespace Chip8Emu.Core.Cpu
         {
             var res = _registers.GetV(x) | _registers.GetV(y);
             _registers.SetV(x, (byte)res);
+            if (_resetCarryFlagOnBitwiseOp)
+            {
+                _registers.SetV(0xF, 0);
+            }
         }
 
         // 8xy2 - AND Vx, Vy
@@ -294,6 +308,10 @@ namespace Chip8Emu.Core.Cpu
         {
             var res = _registers.GetV(x) & _registers.GetV(y);
             _registers.SetV(x, (byte)res);
+            if (_resetCarryFlagOnBitwiseOp)
+            {
+                _registers.SetV(0xF, 0);
+            }
         }
 
         // 8xy3 - XOR Vx, Vy
@@ -301,6 +319,10 @@ namespace Chip8Emu.Core.Cpu
         {
             var res = _registers.GetV(x) ^ _registers.GetV(y);
             _registers.SetV(x, (byte)res);
+            if (_resetCarryFlagOnBitwiseOp)
+            {
+                _registers.SetV(0xF, 0);
+            }
         }
 
         // 8xy4 - ADD Vx, Vy

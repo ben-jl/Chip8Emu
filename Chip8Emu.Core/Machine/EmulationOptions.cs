@@ -16,6 +16,7 @@ namespace Chip8Emu.Core.Machine
         public bool LoadStoreIncrementI { get; init; } = true;
         public bool JumpWithV0 { get; init; } = false;
         public bool ClipSprites { get; init; } = true;
+        public bool ResetCarryFlagOnBitwiseOps { get; init; } = true;
 
         public int RandomSeed { get; init; } = Environment.TickCount;
     }

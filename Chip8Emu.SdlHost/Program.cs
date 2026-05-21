@@ -93,7 +93,9 @@ internal static class Program
 
         //var testRomPath = "C:\\Users\\blevalley\\Downloads\\1-chip8-logo (1).ch8";
         //var testRomPath = "C:\\Users\\blevalley\\Downloads\\2-ibm-logo.ch8";
-        var testRomPath = "C:\\Users\\blevalley\\Downloads\\3-corax+.ch8";
+        //var testRomPath = "C:\\Users\\blevalley\\Downloads\\3-corax+.ch8";
+        //var testRomPath = "C:\\Users\\blevalley\\Downloads\\4-flags.ch8";
+        var testRomPath = "C:\\Users\\blevalley\\Downloads\\5-quirks.ch8";
         var bytes = File.ReadAllBytes(testRomPath);
         machine.LoadRom(bytes);
 //        machine.LoadRom([
