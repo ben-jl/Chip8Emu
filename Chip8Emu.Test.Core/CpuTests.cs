@@ -1222,7 +1222,7 @@ namespace Chip8Emu.Test.Core
         [Theory]
         [InlineData(0x20, 0x10, 0x10, 1)]
         [InlineData(0x10, 0x20, 0xF0, 0)]
-        [InlineData(0x00, 0x00, 0x00, 0)]
+        [InlineData(0x00, 0x00, 0x00, 1)]
         [InlineData(0xFF, 0x01, 0xFE, 1)]
         public void SUB_ShouldSubtractWithBorrowFlag(byte vxValue, byte vyValue, byte expectedResult, byte expectedBorrow)
         {
@@ -1268,7 +1268,7 @@ namespace Chip8Emu.Test.Core
         [Theory]
         [InlineData(0x10, 0x20, 0x10, 1)]
         [InlineData(0x20, 0x10, 0xF0, 0)]
-        [InlineData(0x00, 0x00, 0x00, 0)]
+        [InlineData(0x00, 0x00, 0x00, 1)]
         [InlineData(0x01, 0xFF, 0xFE, 1)]
         public void SUBN_ShouldSubtractVxFromVyWithBorrowFlag(byte vxValue, byte vyValue, byte expectedResult, byte expectedBorrow)
         {

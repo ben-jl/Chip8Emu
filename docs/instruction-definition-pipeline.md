@@ -29,3 +29,7 @@ The emulator now uses a definition-driven instruction pipeline so opcode semanti
 - encode delegates
 
 Specialized opcodes like `00E0` and `00EE` are ordered before generic `0nnn` (`SYS`) to preserve correct matching semantics.
+
+## Execution Scheduling Note
+
+Machine scheduling can consume execute metadata (for example, whether a `DRW` occurred in a step) to apply runtime quirks like display wait. Timer cadence is mode-dependent: `StepFrame()` is frame-cadenced while `StepInstruction()` is instruction-cadenced.

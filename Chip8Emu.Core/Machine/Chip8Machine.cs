@@ -78,19 +78,41 @@ namespace Chip8Emu.Core.Machine
             _keypad.SetKey(key, isPressed);
         }
 
+        /// <summary>
+        /// Executes one emulated frame. Timer cadence in this mode is one tick per frame.
+        /// </summary>
         public void StepFrame()
         {
-            for(var i = 0; i < _options.InstructionsPerFrame; i++)
+            var instructionBudget = Math.Max(1, _options.InstructionsPerFrame);
+            var drewSpriteThisFrame = false;
+            for(var i = 0; i < instructionBudget; i++)
             {
-                StepInstruction();
+                var allowDraw = !_options.DisplayWaitOnDraw || !drewSpriteThisFrame;
+                var stepResult = _cpu.Step(allowDraw);
+                if (stepResult.WaitingForDrawVBlank)
+                {
+                    break;
+                }
+                if (stepResult.DrewSprite)
+                {
+                    drewSpriteThisFrame = true;
+                }
             }
+
+            // Frame stepping uses frame cadence for timers.
+            _timers.Tick();
+            _instructionsSinceLastTimerTick = 0;
         }
 
+        /// <summary>
+        /// Executes one instruction. Timer cadence in this mode is instruction-dependent.
+        /// </summary>
         public void StepInstruction()
         {
-            _cpu.Step();
+            _ = _cpu.Step();
             _instructionsSinceLastTimerTick++;
 
+            // Instruction stepping uses instruction cadence for timers.
             var tickInterval = Math.Max(1, _options.InstructionsPerFrame);
             if (_instructionsSinceLastTimerTick >= tickInterval)
             {

@@ -114,5 +114,32 @@ namespace Chip8Emu.Test.Core
             var snapshot = machine.CurrentSnapshot();
             Assert.Equal((byte)0x04, snapshot.DelayTimer);
         }
+
+        [Fact]
+        public void Chip8Machine_StepFrame_ShouldTickTimersOnce_WhenDisplayWaitExitsEarly()
+        {
+            var machine = new Chip8Machine(new EmulationOptions
+            {
+                InstructionsPerFrame = 10,
+                DisplayWaitOnDraw = true,
+                RandomSeed = 1234
+            });
+
+            machine.LoadRom([
+                0x60, 0x02, // LD V0, 0x02
+                0xF0, 0x15, // LD DT, V0
+                0xD0, 0x11, // DRW V0, V1, 1
+                0x60, 0x09, // LD V0, 0x09
+                0xD0, 0x11, // DRW V0, V1, 1
+                0xF0, 0x07  // LD V0, DT (should execute next frame)
+            ]);
+
+            machine.StepFrame();
+
+            var snapshot = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x01, snapshot.DelayTimer);
+            Assert.Equal((byte)0x09, snapshot.Cpu.V[0]);
+            Assert.Equal((ushort)0x208, snapshot.Cpu.PC);
+        }
     }
 }

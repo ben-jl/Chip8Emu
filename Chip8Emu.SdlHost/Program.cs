@@ -92,7 +92,8 @@ internal static class Program
         var emuOptions = new EmulationOptions()
         {
             IncrementIOnStoreLoadMemoryOps = true,
-            ShiftUsesVy = true
+            ShiftUsesVy = true,
+            DisplayWaitOnDraw = true
         };
         var machine = new Chip8Machine(emuOptions);
 

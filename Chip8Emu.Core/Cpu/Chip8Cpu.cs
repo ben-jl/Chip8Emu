@@ -79,14 +79,25 @@ namespace Chip8Emu.Core.Cpu
             _registers.Reset(_memoryMap);
         }
 
-        public void Step()
+        public CpuStepResult Step(bool allowDraw = true)
         {
-            ushort opcode = FetchOpcode();
+            ushort opcode = ReadOpcodeAt(_registers.PC);
             var instruction = _decoder.DecodeOrThrow(opcode);
-            Execute(instruction);
+            if (!allowDraw && instruction.Definition.Pattern == Chip8InstructionSet.PatternDRW)
+            {
+                return new CpuStepResult(
+                    DrewSprite: false,
+                    WaitingForDrawVBlank: true);
+            }
+
+            _registers.IncrementPC();
+            var drewSprite = Execute(instruction);
+            return new CpuStepResult(
+                DrewSprite: drewSprite,
+                WaitingForDrawVBlank: false);
         }
 
-        private void Execute(DecodedInstruction instruction)
+        private bool Execute(DecodedInstruction instruction)
         {
             var operands = instruction.Operands;
             var mnemonic = instruction.Definition.Mnemonic;
@@ -95,121 +106,118 @@ namespace Chip8Emu.Core.Cpu
             {
                 case Chip8InstructionSet.PatternCLS:
                     CLS();
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternRET:
                     RET();
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSYS:
                     SYS(operands.RequireNNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternJP:
                     JP(operands.RequireNNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternCALL:
                     CALL(operands.RequireNNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSEByte:
                     SEBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSNEByte:
                     SNEBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSEReg:
                     SEREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternLDByte:
                     LDBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternADDByte:
                     ADDBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternLDReg:
                     LDREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternOR:
                     OR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternAND:
                     AND(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternXOR:
                     XOR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternADDReg:
                     ADDREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSUB:
                     SUB(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSHR:
                     SHR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSUBN:
                     SUBN(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSHL:
                     SHL(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSNEReg:
                     SNEREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternLDI:
                     LDI(operands.RequireNNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternJPV0:
                     JPV0(operands.RequireNNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternRND:
                     RND(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternDRW:
                     DRW(operands.RequireX(mnemonic), operands.RequireY(mnemonic), operands.RequireN(mnemonic));
-                    break;
+                    return true;
                 case Chip8InstructionSet.PatternSKP:
                     SKP(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSKNP:
                     SKNP(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternLDDT:
                     LDDT(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternLDK:
                     LDK(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSTDT:
                     STDT(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSTST:
                     STST(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternADDI:
                     ADDI(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternLDFNT:
                     LDFNT(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternLDBCD:
                     LDBCD(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternSTREGI:
                     STREGI(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 case Chip8InstructionSet.PatternLDREGI:
                     LDREGI(operands.RequireX(mnemonic));
-                    break;
+                    return false;
                 default:
                     throw new InvalidOperationException($"Unknown opcode pattern: {instruction.Opcode:X4}");
             }
         }
 
-        private ushort FetchOpcode()
+        private ushort ReadOpcodeAt(ushort pc)
         {
-            byte highByte = _memoryBus.Read(_registers.PC);
-            byte lowByte = _memoryBus.Read((ushort)(_registers.PC + 1));
-
-            _registers.IncrementPC();
-
+            byte highByte = _memoryBus.Read(pc);
+            byte lowByte = _memoryBus.Read((ushort)(pc + 1));
             return (ushort)((highByte << 8) | lowByte);
         }
 
@@ -348,7 +356,8 @@ namespace Chip8Emu.Core.Cpu
         // 8xy5 - SUB Vx, Vy
         private void SUB(byte x, byte y)
         {
-            var borrow = _registers.GetV(x) > _registers.GetV(y) ? 1 : 0;
+            // VF is set when no borrow occurs (Vx >= Vy).
+            var borrow = _registers.GetV(x) >= _registers.GetV(y) ? 1 : 0;
 
             // TODO validate negative handling
             var res = (byte)(_registers.GetV(x) - _registers.GetV(y));
@@ -373,7 +382,8 @@ namespace Chip8Emu.Core.Cpu
         // 8xy7 - SUBN Vx, Vy
         private void SUBN(byte x, byte y)
         {
-            var borrow = _registers.GetV(y) > _registers.GetV(x) ? 1 : 0;
+            // VF is set when no borrow occurs (Vy >= Vx).
+            var borrow = _registers.GetV(y) >= _registers.GetV(x) ? 1 : 0;
             var res = (byte)(_registers.GetV(y) - _registers.GetV(x));
             _registers.SetV(x, res);
             _registers.SetV(0xF, (byte)borrow);
