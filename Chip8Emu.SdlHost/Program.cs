@@ -122,12 +122,10 @@ internal static class Program
 
     private static Chip8Machine GetTestMachine(ITraceSink traceSink)
     {
-        var emuOptions = new EmulationOptions
-        {
-            IncrementIOnStoreLoadMemoryOps = true,
-            ShiftUsesVy = true,
-            DisplayWaitOnDraw = true
-        };
+        var emuOptions = EmulationOptions.CosmacVipChip8;
+        //var emuOptions = EmulationOptions.SuperChip8_Modern;
+        //var emuOptions = EmulationOptions.SuperChip8_Legacy;
+        //var emuOptions = EmulationOptions.XO_CHIP;
         var machine = new Chip8Machine(emuOptions, traceSink);
 
         //var testRomPath = "C:\\Users\\blevalley\\Downloads\\1-chip8-logo (1).ch8";
