@@ -1,15 +1,9 @@
-using Chip8Emu.Core.Diagnostics;
 using Chip8Emu.Core.Debugging.Trace;
+using Chip8Emu.Core.Diagnostics;
 using Chip8Emu.Core.Display;
 using Chip8Emu.Core.Input;
 using Chip8Emu.Core.Memory;
 using Chip8Emu.Core.Timing;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Chip8Emu.Core.Cpu
 {
