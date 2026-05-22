@@ -3,7 +3,7 @@ using System.Threading;
 
 namespace Chip8Emu.Core.Debugging.Trace
 {
-    public sealed class InMemoryTraceBuffer : ITraceSink
+    public sealed class InMemoryTraceBuffer : ITraceBuffer
     {
         private readonly object _gate = new();
         private readonly Queue<TraceEvent> _events;
