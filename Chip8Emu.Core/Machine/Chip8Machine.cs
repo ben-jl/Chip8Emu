@@ -1,15 +1,10 @@
 using Chip8Emu.Core.Cpu;
+using Chip8Emu.Core.Debugging.Trace;
 using Chip8Emu.Core.Diagnostics;
 using Chip8Emu.Core.Display;
 using Chip8Emu.Core.Input;
 using Chip8Emu.Core.Memory;
 using Chip8Emu.Core.Timing;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Chip8Emu.Core.Machine
 {
@@ -21,34 +16,41 @@ namespace Chip8Emu.Core.Machine
         private readonly KeypadState _keypad;
         private readonly Timers _timers;
         private readonly MemoryMap _memoryMap;
+        private readonly ITraceSink? _traceSink;
 
         private readonly EmulationOptions _options;
         private int _instructionsSinceLastTimerTick;
 
-        public Chip8Machine() : this(null)
+        public Chip8Machine() : this(null, null)
         {
         }
 
-        public Chip8Machine(EmulationOptions? options)
+        public Chip8Machine(EmulationOptions? options) : this(options, null)
+        {
+        }
+
+        public Chip8Machine(EmulationOptions? options, ITraceSink? traceSink)
         {
             _options = options ?? EmulationOptions.Default;
-            _memory = new MemoryBus(4096);
+            _traceSink = traceSink;
+            _memory = new MemoryBus(4096, traceSink);
             _timers = new Timers();
             _memoryMap = new MemoryMap();
             _display = new MonochromeFrameBuffer(64, 32);
             _keypad = new KeypadState();
             _cpu = new Chip8Cpu(
-                _memory, 
-                _memoryMap, 
-                _display, 
-                _options.RandomSeed, 
-                _keypad, 
+                _memory,
+                _memoryMap,
+                _display,
+                _options.RandomSeed,
+                _keypad,
                 _timers,
                 _options.ResetCarryFlagOnBitwiseOps,
                 _options.IncrementIOnStoreLoadMemoryOps,
                 _options.ShiftUsesVy,
                 _options.ClipSprites,
-                _options.JumpWithV0);
+                _options.JumpWithV0,
+                traceSink);
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
 
@@ -77,6 +79,7 @@ namespace Chip8Emu.Core.Machine
         public void SetKeyState(byte key, bool isPressed)
         {
             _keypad.SetKey(key, isPressed);
+            _traceSink?.Publish(new KeyStateChangedTraceEvent(key, isPressed));
         }
 
         /// <summary>
@@ -85,13 +88,19 @@ namespace Chip8Emu.Core.Machine
         public void StepFrame()
         {
             var instructionBudget = Math.Max(1, _options.InstructionsPerFrame);
+            _traceSink?.Publish(new FrameStartedTraceEvent(instructionBudget));
+
             var drewSpriteThisFrame = false;
-            for(var i = 0; i < instructionBudget; i++)
+            var instructionsExecuted = 0;
+            var exitedEarlyForDisplayWait = false;
+            for (var i = 0; i < instructionBudget; i++)
             {
                 var allowDraw = !ShouldWaitForDraw() || !drewSpriteThisFrame;
                 var stepResult = _cpu.Step(allowDraw);
+                instructionsExecuted++;
                 if (stepResult.WaitingForDrawVBlank)
                 {
+                    exitedEarlyForDisplayWait = true;
                     break;
                 }
                 if (stepResult.DrewSprite)
@@ -103,6 +112,11 @@ namespace Chip8Emu.Core.Machine
             // Frame stepping uses frame cadence for timers.
             _timers.Tick();
             _instructionsSinceLastTimerTick = 0;
+            _traceSink?.Publish(new TimerTickedTraceEvent("Frame", _timers.DelayTimer, _timers.SoundTimer));
+            _traceSink?.Publish(new FrameCompletedTraceEvent(
+                instructionsExecuted,
+                drewSpriteThisFrame,
+                exitedEarlyForDisplayWait));
         }
 
         private bool ShouldWaitForDraw()
@@ -135,6 +149,7 @@ namespace Chip8Emu.Core.Machine
             {
                 _timers.Tick();
                 _instructionsSinceLastTimerTick = 0;
+                _traceSink?.Publish(new TimerTickedTraceEvent("Instruction", _timers.DelayTimer, _timers.SoundTimer));
             }
         }
 

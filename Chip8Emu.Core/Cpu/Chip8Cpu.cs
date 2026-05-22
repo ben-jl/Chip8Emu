@@ -1,4 +1,5 @@
-﻿using Chip8Emu.Core.Diagnostics;
+using Chip8Emu.Core.Diagnostics;
+using Chip8Emu.Core.Debugging.Trace;
 using Chip8Emu.Core.Display;
 using Chip8Emu.Core.Input;
 using Chip8Emu.Core.Memory;
@@ -24,6 +25,7 @@ namespace Chip8Emu.Core.Cpu
         private int _randomCount = 0;
         private readonly IKeypad _keypad;
         private readonly Timers _timers;
+        private readonly ITraceSink? _traceSink;
 
         private readonly bool _resetCarryFlagOnBitwiseOp;
         private readonly bool _incrementIOnStoreLoadMemoryOp;
@@ -42,7 +44,8 @@ namespace Chip8Emu.Core.Cpu
             bool incrementIOnStoreLoadMemoryOp,
             bool shiftUsesVy,
             bool clipSprites,
-            bool jumpWithV0)
+            bool jumpWithV0,
+            ITraceSink? traceSink = null)
         {
             ArgumentNullException.ThrowIfNull(memoryBus);
             ArgumentNullException.ThrowIfNull(memoryMap);
@@ -59,6 +62,7 @@ namespace Chip8Emu.Core.Cpu
             _randomSeed = randomSeed;
             _keypad = keypad;
             _timers = timers;
+            _traceSink = traceSink;
             _resetCarryFlagOnBitwiseOp = resetCarryFlagOnBitwiseOp;
             _incrementIOnStoreLoadMemoryOp = incrementIOnStoreLoadMemoryOp;
             _shiftUsesVy = shiftUsesVy;
@@ -84,20 +88,56 @@ namespace Chip8Emu.Core.Cpu
 
         public CpuStepResult Step(bool allowDraw = true)
         {
-            ushort opcode = ReadOpcodeAt(_registers.PC);
-            var instruction = _decoder.DecodeOrThrow(opcode);
+            var pcBefore = _registers.PC;
+            ushort opcode = ReadOpcodeAt(pcBefore);
+            _traceSink?.Publish(new InstructionFetchedTraceEvent(pcBefore, opcode));
+
+            DecodedInstruction instruction;
+            try
+            {
+                instruction = _decoder.DecodeOrThrow(opcode);
+            }
+            catch (Exception ex)
+            {
+                _traceSink?.Publish(new InstructionFaultedTraceEvent(pcBefore, opcode, ex.Message));
+                throw;
+            }
+
+            _traceSink?.Publish(new InstructionDecodedTraceEvent(
+                pcBefore,
+                opcode,
+                instruction.Definition.Mnemonic,
+                instruction.Operands));
+
             if (!allowDraw && instruction.Definition.Pattern == Chip8InstructionSet.PatternDRW)
             {
-                return new CpuStepResult(
+                var waitResult = new CpuStepResult(
                     DrewSprite: false,
                     WaitingForDrawVBlank: true);
+
+                _traceSink?.Publish(new InstructionExecutedTraceEvent(
+                    pcBefore,
+                    _registers.PC,
+                    opcode,
+                    waitResult.DrewSprite,
+                    waitResult.WaitingForDrawVBlank));
+                return waitResult;
             }
 
             _registers.IncrementPC();
             var drewSprite = Execute(instruction);
-            return new CpuStepResult(
+            var stepResult = new CpuStepResult(
                 DrewSprite: drewSprite,
                 WaitingForDrawVBlank: false);
+
+            _traceSink?.Publish(new InstructionExecutedTraceEvent(
+                pcBefore,
+                _registers.PC,
+                opcode,
+                stepResult.DrewSprite,
+                stepResult.WaitingForDrawVBlank));
+
+            return stepResult;
         }
 
         private bool Execute(DecodedInstruction instruction)
@@ -634,3 +674,8 @@ namespace Chip8Emu.Core.Cpu
         }
     }
 }
+
+
+
+
+

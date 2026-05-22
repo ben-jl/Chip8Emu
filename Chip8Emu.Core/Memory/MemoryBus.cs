@@ -1,18 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Chip8Emu.Core.Debugging.Trace;
 
 namespace Chip8Emu.Core.Memory
 {
     internal class MemoryBus : IMemoryBus
     {
         private readonly byte[] _memory;
+        private readonly ITraceSink? _traceSink;
 
-        public MemoryBus(ushort size)
+        public MemoryBus(ushort size, ITraceSink? traceSink = null)
         {
             _memory = new byte[size];
+            _traceSink = traceSink;
         }
 
         public byte Read(ushort address)
@@ -22,7 +20,9 @@ namespace Chip8Emu.Core.Memory
                 throw new IndexOutOfRangeException($"Address {address:X4} is out of bounds.");
             }
 
-            return _memory[address];
+            var value = _memory[address];
+            _traceSink?.Publish(new MemoryReadTraceEvent(address, value));
+            return value;
         }
 
         public void Write(ushort address, byte value)
@@ -33,6 +33,7 @@ namespace Chip8Emu.Core.Memory
             }
 
             _memory[address] = value;
+            _traceSink?.Publish(new MemoryWriteTraceEvent(address, value));
         }
 
         public void WriteBlock(ushort startAddress, ReadOnlySpan<byte> data)
@@ -45,6 +46,7 @@ namespace Chip8Emu.Core.Memory
             for (int i = 0; i < data.Length; i++)
             {
                 _memory[startAddress + i] = data[i];
+                _traceSink?.Publish(new MemoryWriteTraceEvent((ushort)(startAddress + i), data[i]));
             }
         }
 
