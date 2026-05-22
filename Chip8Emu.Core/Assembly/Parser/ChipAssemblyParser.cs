@@ -51,6 +51,7 @@ namespace Chip8Emu.Core.Assembly.Parser
                 TokenKind.Identifier when Peek()?.Kind == TokenKind.Colon => ParseLabel(),
                 TokenKind.Mnemonic => ParseInstruction(),
                 TokenKind.Directive => ParseDirective(),
+                TokenKind.Identifier => ErrorWithCode("UNKNOWN_MNEMONIC", $"Unknown mnemonic: {currentToken.Lexeme}", null),
                 _ => Error($"Unexpected token: {currentToken.Lexeme}", null)
             };
         }
@@ -185,24 +186,38 @@ namespace Chip8Emu.Core.Assembly.Parser
 
         private Token CurrentToken()
         {
-            return IsAtEnd() ? _tokens[_tokens.Count - 1] : _tokens[_position];
+            return _position < _tokens.Count ? _tokens[_position] : _tokens[_tokens.Count - 1];
         }
 
         private Token? Peek()
         {
-            return _position + 1 >= _tokens.Count ? null : _tokens[_position + 1];
+            return _position + 1 < _tokens.Count ? _tokens[_position + 1] : null;
         }
 
         private bool IsAtEnd()
         {
-            return CurrentToken().Kind == TokenKind.Eof;
+            return _position >= _tokens.Count || _tokens[_position].Kind == TokenKind.Eof;
         }
 
         private ParsedStatement? Error(string message, ParsedStatement? recovery)
         {
+            return ErrorWithCode("PARSE_ERROR", message, recovery);
+        }
+
+        private ParsedStatement? ErrorWithCode(string code, string message, ParsedStatement? recovery)
+        {
             var token = CurrentToken();
-            _diagnostics.ReportError("PARSE_ERROR", message, token.LineNumber, token.ColumnNumber);
+            _diagnostics.ReportError(code, message, token.LineNumber, token.ColumnNumber);
+            SkipToNextLine();
             return recovery;
+        }
+
+        private void SkipToNextLine()
+        {
+            while (!IsAtEnd() && CurrentToken().Kind != TokenKind.Newline)
+            {
+                Advance();
+            }
         }
     }
 }

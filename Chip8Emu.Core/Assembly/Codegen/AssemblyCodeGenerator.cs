@@ -1,26 +1,25 @@
+using System.Globalization;
+using Chip8Emu.Core.Assembly.Diagnostics;
 using Chip8Emu.Core.Assembly.Parser;
 using Chip8Emu.Core.Assembly.Symbols;
-using Chip8Emu.Core.Assembly.Diagnostics;
 
 namespace Chip8Emu.Core.Assembly.Codegen
 {
     internal sealed class AssemblyCodeGenerator
     {
         private readonly AssemblyDiagnostics _diagnostics;
-        private readonly InstructionEncoder _encoder;
 
         public AssemblyCodeGenerator(AssemblyDiagnostics diagnostics)
         {
             _diagnostics = diagnostics;
-            _encoder = new InstructionEncoder();
         }
 
-        public AssemblyResult GenerateCode(ParsedProgram program, ushort startAddress)
+        public AssemblyResult GenerateCode(ParsedProgram program, ushort defaultStartAddress)
         {
             var symbols = new AssemblySymbolTable();
-            var currentAddress = startAddress;
+            ushort startAddress = defaultStartAddress;
 
-            FirstPass(program, symbols, ref currentAddress);
+            FirstPass(program, symbols, ref startAddress);
 
             if (_diagnostics.HasErrors)
             {
@@ -31,17 +30,20 @@ namespace Chip8Emu.Core.Assembly.Codegen
                     Diagnostics: _diagnostics);
             }
 
-            var bytecode = SecondPass(program, symbols, startAddress);
+            var bytecode = SecondPass(program, symbols);
 
             return new AssemblyResult(
-                Success: true,
-                Bytecode: bytecode,
+                Success: !_diagnostics.HasErrors,
+                Bytecode: _diagnostics.HasErrors ? null : bytecode,
                 StartAddress: startAddress,
                 Diagnostics: _diagnostics);
         }
 
-        private void FirstPass(ParsedProgram program, AssemblySymbolTable symbols, ref ushort currentAddress)
+        private void FirstPass(ParsedProgram program, AssemblySymbolTable symbols, ref ushort startAddress)
         {
+            var currentAddress = startAddress;
+            var orgApplied = false;
+
             foreach (var statement in program.Statements)
             {
                 switch (statement)
@@ -50,86 +52,85 @@ namespace Chip8Emu.Core.Assembly.Codegen
                         symbols.DefineLabel(label.Name, currentAddress, label.LineNumber);
                         break;
 
-                    case ParsedInstruction instr:
+                    case ParsedInstruction:
                         currentAddress += 2;
                         break;
 
                     case ParsedDirective dir:
-                        HandleDirective(dir, symbols, ref currentAddress);
+                        HandleDirectiveFirstPass(dir, symbols, ref currentAddress, ref startAddress, ref orgApplied);
                         break;
                 }
             }
         }
 
-        private byte[] SecondPass(ParsedProgram program, AssemblySymbolTable symbols, ushort startAddress)
+        private byte[] SecondPass(ParsedProgram program, AssemblySymbolTable symbols)
         {
             var bytecode = new List<byte>();
-            var currentAddress = startAddress;
+            var encoder = new InstructionEncoder(_diagnostics);
 
             foreach (var statement in program.Statements)
             {
-                switch (statement)
+                if (statement is not ParsedInstruction instr)
+                    continue;
+
+                var opcode = encoder.EncodeInstruction(instr.Mnemonic, instr.Operands, symbols, instr.LineNumber);
+                if (opcode.HasValue)
                 {
-                    case ParsedLabel:
-                        break;
-
-                    case ParsedInstruction instr:
-                        try
-                        {
-                            var opcode = _encoder.EncodeInstruction(instr.Mnemonic, instr.Operands, symbols);
-                            bytecode.Add((byte)((opcode >> 8) & 0xFF));
-                            bytecode.Add((byte)(opcode & 0xFF));
-                            currentAddress += 2;
-                        }
-                        catch (Exception ex)
-                        {
-                            _diagnostics.ReportError("ENCODE_ERROR", ex.Message, instr.LineNumber, 0);
-                        }
-                        break;
-
-                    case ParsedDirective:
-                        break;
+                    bytecode.Add((byte)((opcode.Value >> 8) & 0xFF));
+                    bytecode.Add((byte)(opcode.Value & 0xFF));
                 }
             }
 
             return bytecode.ToArray();
         }
 
-        private void HandleDirective(ParsedDirective directive, AssemblySymbolTable symbols, ref ushort currentAddress)
+        private void HandleDirectiveFirstPass(
+            ParsedDirective directive,
+            AssemblySymbolTable symbols,
+            ref ushort currentAddress,
+            ref ushort startAddress,
+            ref bool orgApplied)
         {
             switch (directive.Name.ToUpperInvariant())
             {
                 case "ORG":
-                    if (directive.Arguments.Length > 0 && ushort.TryParse(
-                        directive.Arguments[0].StartsWith("0x") || directive.Arguments[0].StartsWith("0X")
-                            ? directive.Arguments[0][2..]
-                            : directive.Arguments[0],
-                        System.Globalization.NumberStyles.HexNumber,
-                        null,
-                        out var addr))
+                    if (directive.Arguments.Length > 0 && TryParseInteger(directive.Arguments[0], out var addr))
                     {
-                        currentAddress = addr;
+                        currentAddress = (ushort)addr;
+                        if (!orgApplied)
+                        {
+                            startAddress = currentAddress;
+                            orgApplied = true;
+                        }
+                    }
+                    else
+                    {
+                        _diagnostics.ReportError("INVALID_DIRECTIVE", "ORG requires a valid address argument", directive.LineNumber, 0);
                     }
                     break;
 
                 case "DEFINE":
-                    if (directive.Arguments.Length >= 2 &&
-                        int.TryParse(
-                            directive.Arguments[1].StartsWith("0x") || directive.Arguments[1].StartsWith("0X")
-                                ? directive.Arguments[1][2..]
-                                : directive.Arguments[1],
-                            System.Globalization.NumberStyles.HexNumber,
-                            null,
-                            out var value))
+                    if (directive.Arguments.Length >= 2 && TryParseInteger(directive.Arguments[1], out var value))
                     {
                         symbols.DefineConstant(directive.Arguments[0], value, directive.LineNumber);
+                    }
+                    else
+                    {
+                        _diagnostics.ReportError("INVALID_DIRECTIVE", "DEFINE requires a name and a numeric value", directive.LineNumber, 0);
                     }
                     break;
 
                 case "INCLUDE":
-                    _diagnostics.ReportError("NOT_IMPLEMENTED", "INCLUDE directive not yet supported", directive.LineNumber, 0);
+                    _diagnostics.ReportError("NOT_IMPLEMENTED", "INCLUDE directive is not yet supported", directive.LineNumber, 0);
                     break;
             }
+        }
+
+        private static bool TryParseInteger(string s, out int value)
+        {
+            if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return int.TryParse(s[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
+            return int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
         }
     }
 }

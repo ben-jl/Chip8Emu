@@ -18,7 +18,7 @@ namespace Chip8Emu.Core.Assembly.Lexer
         {
             "V0", "V1", "V2", "V3", "V4", "V5", "V6", "V7",
             "V8", "V9", "VA", "VB", "VC", "VD", "VE", "VF",
-            "I", "DT", "ST", "F", "K"
+            "I", "DT", "ST", "F", "K", "B"
         };
 
         private static readonly HashSet<string> Directives = new(StringComparer.OrdinalIgnoreCase)
@@ -79,15 +79,17 @@ namespace Chip8Emu.Core.Assembly.Lexer
         {
             var start = _position;
             Advance(); // skip '0'
-            Advance(); // skip 'x'
+            Advance(); // skip 'x' or 'X'
 
+            var hexStart = _position;
             while (!IsAtEnd() && IsHexDigit(CurrentChar()))
             {
                 Advance();
             }
 
             var lexeme = _source[start.._position];
-            var value = int.Parse(lexeme, System.Globalization.NumberStyles.HexNumber);
+            var hexDigits = _source[hexStart.._position];
+            var value = hexDigits.Length > 0 ? Convert.ToInt32(hexDigits, 16) : 0;
             return new Token(TokenKind.HexNumber, lexeme, value, startLine, startColumn);
         }
 
@@ -164,8 +166,16 @@ namespace Chip8Emu.Core.Assembly.Lexer
 
         private Token Advance(Token token)
         {
+            if (CurrentChar() == '\n')
+            {
+                _line++;
+                _column = 1;
+            }
+            else
+            {
+                _column++;
+            }
             _position++;
-            _column++;
             return token;
         }
 
