@@ -27,6 +27,8 @@ namespace Chip8Emu.Core.Cpu
         private readonly bool _clipSprites;
         private readonly bool _jumpWithV0;
 
+        private readonly Dictionary<ushort, Func<DecodedInstruction, bool>> _instructionHandlers;
+
         public Chip8Cpu(
             IMemoryBus memoryBus,
             MemoryMap memoryMap,
@@ -59,6 +61,7 @@ namespace Chip8Emu.Core.Cpu
             _shiftUsesVy = cpuConfig.ShiftUsesVy;
             _clipSprites = cpuConfig.ClipSprites;
             _jumpWithV0 = cpuConfig.JumpWithV0;
+            _instructionHandlers = BuildInstructionHandlers();
         }
 
         public CpuSnapshot CurrentSnapshot()
@@ -75,6 +78,50 @@ namespace Chip8Emu.Core.Cpu
         public void Reset()
         {
             _registers.Reset(_memoryMap);
+        }
+
+        private Dictionary<ushort, Func<DecodedInstruction, bool>> BuildInstructionHandlers()
+        {
+            return new Dictionary<ushort, Func<DecodedInstruction, bool>>
+            {
+                { Chip8InstructionSet.PatternCLS, instr => { CLS(); return false; } },
+                { Chip8InstructionSet.PatternRET, instr => { RET(); return false; } },
+                { Chip8InstructionSet.PatternLOW, instr => { LOW(); return false; } },
+                { Chip8InstructionSet.PatternHIGH, instr => { HIGH(); return false; } },
+                { Chip8InstructionSet.PatternSYS, instr => { SYS(instr.Operands.RequireNNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternJP, instr => { JP(instr.Operands.RequireNNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternCALL, instr => { CALL(instr.Operands.RequireNNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSEByte, instr => { SEBYTE(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSNEByte, instr => { SNEBYTE(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSEReg, instr => { SEREG(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternLDByte, instr => { LDBYTE(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternADDByte, instr => { ADDBYTE(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternLDReg, instr => { LDREG(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternOR, instr => { OR(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternAND, instr => { AND(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternXOR, instr => { XOR(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternADDReg, instr => { ADDREG(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSUB, instr => { SUB(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSHR, instr => { SHR(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSUBN, instr => { SUBN(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSHL, instr => { SHL(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSNEReg, instr => { SNEREG(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternLDI, instr => { LDI(instr.Operands.RequireNNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternJPV0, instr => { JPBase(instr.Operands.RequireNNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternRND, instr => { RND(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireNN(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternDRW, instr => { DRW(instr.Operands.RequireX(instr.Definition.Mnemonic), instr.Operands.RequireY(instr.Definition.Mnemonic), instr.Operands.RequireN(instr.Definition.Mnemonic)); return true; } },
+                { Chip8InstructionSet.PatternSKP, instr => { SKP(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSKNP, instr => { SKNP(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternLDDT, instr => { LDDT(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternLDK, instr => { LDK(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSTDT, instr => { STDT(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSTST, instr => { STST(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternADDI, instr => { ADDI(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternLDFNT, instr => { LDFNT(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternLDBCD, instr => { LDBCD(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternSTREGI, instr => { STREGI(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+                { Chip8InstructionSet.PatternLDREGI, instr => { LDREGI(instr.Operands.RequireX(instr.Definition.Mnemonic)); return false; } },
+            };
         }
 
         public CpuStepResult Step(bool allowDraw = true)
@@ -133,125 +180,12 @@ namespace Chip8Emu.Core.Cpu
 
         private bool Execute(DecodedInstruction instruction)
         {
-            var operands = instruction.Operands;
-            var mnemonic = instruction.Definition.Mnemonic;
-
-            switch (instruction.Definition.Pattern)
+            if (_instructionHandlers.TryGetValue(instruction.Definition.Pattern, out var handler))
             {
-                case Chip8InstructionSet.PatternCLS:
-                    CLS();
-                    return false;
-                case Chip8InstructionSet.PatternRET:
-                    RET();
-                    return false;
-                case Chip8InstructionSet.PatternLOW:
-                    LOW();
-                    return false;
-                case Chip8InstructionSet.PatternHIGH:
-                    HIGH();
-                    return false;
-                case Chip8InstructionSet.PatternSYS:
-                    SYS(operands.RequireNNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternJP:
-                    JP(operands.RequireNNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternCALL:
-                    CALL(operands.RequireNNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSEByte:
-                    SEBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSNEByte:
-                    SNEBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSEReg:
-                    SEREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternLDByte:
-                    LDBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternADDByte:
-                    ADDBYTE(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternLDReg:
-                    LDREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternOR:
-                    OR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternAND:
-                    AND(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternXOR:
-                    XOR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternADDReg:
-                    ADDREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSUB:
-                    SUB(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSHR:
-                    SHR(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSUBN:
-                    SUBN(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSHL:
-                    SHL(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSNEReg:
-                    SNEREG(operands.RequireX(mnemonic), operands.RequireY(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternLDI:
-                    LDI(operands.RequireNNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternJPV0:
-                    JPBase(operands.RequireNNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternRND:
-                    RND(operands.RequireX(mnemonic), operands.RequireNN(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternDRW:
-                    DRW(operands.RequireX(mnemonic), operands.RequireY(mnemonic), operands.RequireN(mnemonic));
-                    return true;
-                case Chip8InstructionSet.PatternSKP:
-                    SKP(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSKNP:
-                    SKNP(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternLDDT:
-                    LDDT(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternLDK:
-                    LDK(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSTDT:
-                    STDT(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSTST:
-                    STST(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternADDI:
-                    ADDI(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternLDFNT:
-                    LDFNT(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternLDBCD:
-                    LDBCD(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternSTREGI:
-                    STREGI(operands.RequireX(mnemonic));
-                    return false;
-                case Chip8InstructionSet.PatternLDREGI:
-                    LDREGI(operands.RequireX(mnemonic));
-                    return false;
-                default:
-                    throw new InvalidOperationException($"Unknown opcode pattern: {instruction.Opcode:X4}");
+                return handler(instruction);
             }
+
+            throw new InvalidOperationException($"Unknown opcode pattern: {instruction.Opcode:X4}");
         }
 
         private ushort ReadOpcodeAt(ushort pc)
