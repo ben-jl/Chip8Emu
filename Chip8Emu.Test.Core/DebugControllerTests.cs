@@ -1,4 +1,5 @@
 using Chip8Emu.Core.Debugging;
+using Chip8Emu.Core.Debugging.Breakpoints;
 using Chip8Emu.Core.Machine;
 
 namespace Chip8Emu.Test.Core
@@ -96,6 +97,76 @@ namespace Chip8Emu.Test.Core
             Assert.Equal(DebugExecutionMode.Paused, state.Mode);
             Assert.Equal(DebugStopReason.StepComplete, state.StopReason);
             Assert.Equal(2, state.InstructionSteps);
+        }
+
+        [Fact]
+        public void DebugController_Update_ShouldPauseWhenAddressBreakpointMatches()
+        {
+            var machine = new Chip8Machine(new EmulationOptions { RandomSeed = 1234 });
+            machine.LoadRom([
+                0x60, 0xAB, // LD V0, 0xAB
+                0x61, 0xCD  // LD V1, 0xCD
+            ]);
+            var controller = new EmulatorDebugController(machine);
+            var breakpoint = controller.Breakpoints.AddAddressBreakpoint(0x200);
+
+            controller.Update();
+
+            var state = controller.State;
+            var snapshot = controller.MachineSnapshot;
+            Assert.Equal(DebugExecutionMode.Paused, state.Mode);
+            Assert.Equal(DebugStopReason.BreakpointHit, state.StopReason);
+            Assert.Equal((ushort)0x200, snapshot.Cpu.PC);
+            Assert.NotNull(controller.LastBreakpointMatch);
+            Assert.Equal(breakpoint.Id, controller.LastBreakpointMatch!.BreakpointId);
+            Assert.Equal(BreakpointKind.Address, controller.LastBreakpointMatch.Kind);
+        }
+
+        [Fact]
+        public void DebugController_Update_ShouldPauseWhenOpcodeBreakpointMatches()
+        {
+            var machine = new Chip8Machine(new EmulationOptions { RandomSeed = 1234 });
+            machine.LoadRom([
+                0x60, 0xAB, // LD V0, 0xAB
+                0x61, 0xCD  // LD V1, 0xCD
+            ]);
+            var controller = new EmulatorDebugController(machine);
+            var breakpoint = controller.Breakpoints.AddOpcodeBreakpoint(0x6000, 0xF000);
+
+            controller.Update();
+
+            var state = controller.State;
+            Assert.Equal(DebugExecutionMode.Paused, state.Mode);
+            Assert.Equal(DebugStopReason.BreakpointHit, state.StopReason);
+            Assert.NotNull(controller.LastBreakpointMatch);
+            Assert.Equal(breakpoint.Id, controller.LastBreakpointMatch!.BreakpointId);
+            Assert.Equal(BreakpointKind.Opcode, controller.LastBreakpointMatch.Kind);
+        }
+
+        [Fact]
+        public void DebugController_Update_ShouldIgnoreDisabledBreakpoints()
+        {
+            var machine = new Chip8Machine(new EmulationOptions
+            {
+                InstructionsPerFrame = 1,
+                RandomSeed = 1234
+            });
+            machine.LoadRom([
+                0x60, 0xAB, // LD V0, 0xAB
+                0x61, 0xCD  // LD V1, 0xCD
+            ]);
+            var controller = new EmulatorDebugController(machine);
+            var breakpoint = controller.Breakpoints.AddAddressBreakpoint(0x200);
+            _ = controller.Breakpoints.SetEnabled(breakpoint.Id, false);
+
+            controller.Update();
+
+            var state = controller.State;
+            var snapshot = controller.MachineSnapshot;
+            Assert.Equal(DebugExecutionMode.Running, state.Mode);
+            Assert.Equal(DebugStopReason.None, state.StopReason);
+            Assert.Equal((ushort)0x202, snapshot.Cpu.PC);
+            Assert.Null(controller.LastBreakpointMatch);
         }
     }
 }

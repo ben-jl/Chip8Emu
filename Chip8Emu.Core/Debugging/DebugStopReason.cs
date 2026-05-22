@@ -4,6 +4,7 @@ namespace Chip8Emu.Core.Debugging
     {
         None = 0,
         UserPause = 1,
-        StepComplete = 2
+        StepComplete = 2,
+        BreakpointHit = 3
     }
 }

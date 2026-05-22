@@ -34,5 +34,10 @@ namespace Chip8Emu.Core.Machine
         /// Returns currently loaded ROM bytes when available.
         /// </summary>
         bool TryGetLoadedRom(out ReadOnlyMemory<byte> romData, out ushort romStartAddress);
+
+        /// <summary>
+        /// Reads the opcode at the current program counter without advancing execution.
+        /// </summary>
+        ushort PeekOpcodeAtProgramCounter();
     }
 }

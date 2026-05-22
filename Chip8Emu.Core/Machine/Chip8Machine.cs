@@ -178,5 +178,13 @@ namespace Chip8Emu.Core.Machine
             romStartAddress = _memoryMap.RomStart;
             return true;
         }
+
+        public ushort PeekOpcodeAtProgramCounter()
+        {
+            var pc = _cpu.CurrentSnapshot().PC;
+            var high = _memory.Read(pc);
+            var low = _memory.Read((ushort)(pc + 1));
+            return (ushort)((high << 8) | low);
+        }
     }
 }
