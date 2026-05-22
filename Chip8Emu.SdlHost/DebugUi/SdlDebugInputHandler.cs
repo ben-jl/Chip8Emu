@@ -24,6 +24,11 @@ namespace Chip8Emu.SdlHost.Debug
                 return false;
             }
 
+            if (!viewState.OverlayVisible && command != SdlDebugCommand.ToggleOverlay)
+            {
+                return false;
+            }
+
             ExecuteCommand(command, viewState, machine, controller);
             return true;
         }
@@ -38,7 +43,7 @@ namespace Chip8Emu.SdlHost.Debug
             {
                 case SdlDebugCommand.ToggleOverlay:
                     viewState.OverlayVisible = !viewState.OverlayVisible;
-                    viewState.LastAction = viewState.OverlayVisible ? "OVERLAY ON" : "OVERLAY OFF";
+                    viewState.LastAction = viewState.OverlayVisible ? "DEBUG MODE ON" : "DEBUG MODE OFF";
                     break;
                 case SdlDebugCommand.PauseResume:
                     if (controller.State.Mode == DebugExecutionMode.Running)

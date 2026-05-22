@@ -13,8 +13,11 @@ internal static class Program
     private const int Chip8Width = 64;
     private const int Chip8Height = 32;
     private const int Scale = 16;
+    private const int SidePanelWidth = 340;
 
-    private const int WindowWidth = Chip8Width * Scale;
+    private const int DisplayWidth = Chip8Width * Scale;
+    private const int BaseWindowWidth = DisplayWidth;
+    private const int ExpandedWindowWidth = DisplayWidth + (SidePanelWidth * 2);
     private const int WindowHeight = Chip8Height * Scale;
 
     [STAThread]
@@ -28,7 +31,7 @@ internal static class Program
 
         if (!SDL.CreateWindowAndRenderer(
             "Chip-8 Emulator",
-            WindowWidth,
+            BaseWindowWidth,
             WindowHeight,
             0,
             out var window,
@@ -44,8 +47,14 @@ internal static class Program
         var controller = new EmulatorDebugController(machine);
         var disassembler = new Chip8Disassembler();
         var debugViewState = new SdlDebugViewState();
-        var overlayRenderer = new SdlDebugOverlayRenderer(renderer, WindowWidth, WindowHeight);
+        var overlayRenderer = new SdlDebugOverlayRenderer(
+            renderer,
+            ExpandedWindowWidth,
+            WindowHeight,
+            SidePanelWidth,
+            DisplayWidth);
         var frameBufferRenderer = new SdlFramebufferRenderer(renderer, Scale);
+        var previousDebugMode = debugViewState.IsDebugInputMode;
 
         using var audio = new SdlBeepAudio();
         var running = true;
@@ -70,10 +79,16 @@ internal static class Program
                     continue;
                 }
 
-                if (!debugViewState.IsDebugInputMode)
-                {
-                    _ = SdlInput.HandleChip8KeyEvent(sdlEvent, machine);
-                }
+                _ = SdlInput.HandleChip8KeyEvent(sdlEvent, machine);
+            }
+
+            if (debugViewState.IsDebugInputMode != previousDebugMode)
+            {
+                var targetWidth = debugViewState.IsDebugInputMode
+                    ? ExpandedWindowWidth
+                    : BaseWindowWidth;
+                _ = SDL.SetWindowSize(window, targetWidth, WindowHeight);
+                previousDebugMode = debugViewState.IsDebugInputMode;
             }
 
             controller.Update();
@@ -81,10 +96,13 @@ internal static class Program
             audio.SetEnabled(machine.SoundEnabled);
             audio.Update();
 
+            var displayOriginX = debugViewState.IsDebugInputMode ? SidePanelWidth : 0;
             frameBufferRenderer.Render(
                 machine.Display.Buffer,
                 machine.Display.Width,
-                machine.Display.Height);
+                machine.Display.Height,
+                displayOriginX,
+                0);
 
             overlayRenderer.Render(
                 debugViewState,

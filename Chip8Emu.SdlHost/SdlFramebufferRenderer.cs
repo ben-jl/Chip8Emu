@@ -19,7 +19,7 @@ namespace Chip8Emu.SdlHost
             _scale = scale;
         }
 
-        public void Render(ReadOnlySpan<byte> buffer, int width, int height)
+        public void Render(ReadOnlySpan<byte> buffer, int width, int height, int originX = 0, int originY = 0)
         {
             SDL.SetRenderDrawColor(_renderer, 16, 16, 16, 255);
             SDL.RenderClear(_renderer);
@@ -39,8 +39,8 @@ namespace Chip8Emu.SdlHost
 
                     var rect = new SDL.FRect
                     {
-                        X = x * _scale,
-                        Y = y * _scale,
+                        X = originX + (x * _scale),
+                        Y = originY + (y * _scale),
                         W = _scale,
                         H = _scale
                     };
