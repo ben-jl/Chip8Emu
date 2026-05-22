@@ -1,9 +1,5 @@
-﻿using Chip8Emu.Core.Display;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Chip8Emu.Core.Diagnostics;
+using Chip8Emu.Core.Display;
 
 namespace Chip8Emu.Core.Machine
 {
@@ -22,10 +18,16 @@ namespace Chip8Emu.Core.Machine
         /// Executes exactly one instruction. Timer cadence is instruction-dependent in this mode.
         /// </summary>
         void StepInstruction();
+
         /// <summary>
         /// Executes up to <see cref="EmulationOptions.InstructionsPerFrame"/> instructions for one frame.
         /// Timer cadence is frame-dependent in this mode.
         /// </summary>
         void StepFrame();
+
+        /// <summary>
+        /// Captures current state for diagnostics and debugging workflows.
+        /// </summary>
+        MachineSnapshot CurrentSnapshot();
     }
 }
