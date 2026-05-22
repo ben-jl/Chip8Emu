@@ -90,14 +90,30 @@ namespace Chip8Emu.Core.Machine
         /// </summary>
         public void StepFrame()
         {
+            _ = StepFrameUntil(static (_, _) => false);
+        }
+
+        public bool StepFrameUntil(Func<ushort, ushort, bool> shouldPauseBeforeInstruction)
+        {
+            ArgumentNullException.ThrowIfNull(shouldPauseBeforeInstruction);
+
             var instructionBudget = Math.Max(1, _options.InstructionsPerFrame);
             _traceSink?.Publish(new FrameStartedTraceEvent(instructionBudget));
 
             var drewSpriteThisFrame = false;
             var instructionsExecuted = 0;
             var exitedEarlyForDisplayWait = false;
+            var interruptedByPredicate = false;
             for (var i = 0; i < instructionBudget; i++)
             {
+                var pc = _cpu.CurrentSnapshot().PC;
+                var opcode = PeekOpcodeAtProgramCounter();
+                if (shouldPauseBeforeInstruction(pc, opcode))
+                {
+                    interruptedByPredicate = true;
+                    break;
+                }
+
                 var allowDraw = !ShouldWaitForDraw() || !drewSpriteThisFrame;
                 var stepResult = _cpu.Step(allowDraw);
                 instructionsExecuted++;
@@ -113,13 +129,20 @@ namespace Chip8Emu.Core.Machine
             }
 
             // Frame stepping uses frame cadence for timers.
-            _timers.Tick();
-            _instructionsSinceLastTimerTick = 0;
-            _traceSink?.Publish(new TimerTickedTraceEvent("Frame", _timers.DelayTimer, _timers.SoundTimer));
+            // If a breakpoint pauses before any instruction executes, preserve timer state.
+            if (!interruptedByPredicate || instructionsExecuted > 0)
+            {
+                _timers.Tick();
+                _instructionsSinceLastTimerTick = 0;
+                _traceSink?.Publish(new TimerTickedTraceEvent("Frame", _timers.DelayTimer, _timers.SoundTimer));
+            }
+
             _traceSink?.Publish(new FrameCompletedTraceEvent(
                 instructionsExecuted,
                 drewSpriteThisFrame,
                 exitedEarlyForDisplayWait));
+
+            return interruptedByPredicate;
         }
 
         private bool ShouldWaitForDraw()

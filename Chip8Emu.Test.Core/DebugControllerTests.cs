@@ -168,5 +168,33 @@ namespace Chip8Emu.Test.Core
             Assert.Equal((ushort)0x202, snapshot.Cpu.PC);
             Assert.Null(controller.LastBreakpointMatch);
         }
+
+        [Fact]
+        public void DebugController_Update_ShouldPauseMidFrame_WhenLaterInstructionMatchesBreakpoint()
+        {
+            var machine = new Chip8Machine(new EmulationOptions
+            {
+                InstructionsPerFrame = 10,
+                RandomSeed = 1234
+            });
+            machine.LoadRom([
+                0x60, 0x01, // LD V0, 0x01 (0x200)
+                0x61, 0x02, // LD V1, 0x02 (0x202)
+                0x62, 0x03  // LD V2, 0x03 (0x204)
+            ]);
+            var controller = new EmulatorDebugController(machine);
+            _ = controller.Breakpoints.AddAddressBreakpoint(0x202);
+
+            controller.Update();
+
+            var state = controller.State;
+            var snapshot = controller.MachineSnapshot;
+            Assert.Equal(DebugExecutionMode.Paused, state.Mode);
+            Assert.Equal(DebugStopReason.BreakpointHit, state.StopReason);
+            Assert.Equal((ushort)0x202, snapshot.Cpu.PC);
+            Assert.Equal((byte)0x01, snapshot.Cpu.V[0]);
+            Assert.Equal((byte)0x00, snapshot.Cpu.V[1]);
+            Assert.Equal((byte)0x00, snapshot.Cpu.V[2]);
+        }
     }
 }

@@ -93,9 +93,19 @@ namespace Chip8Emu.Core.Debugging
                 return;
             }
 
-            var snapshot = _machine.CurrentSnapshot();
-            var opcode = _machine.PeekOpcodeAtProgramCounter();
-            if (_breakpoints.TryMatch(snapshot.Cpu.PC, opcode, out var breakpointMatch))
+            BreakpointMatch? breakpointMatch = null;
+            var interrupted = _machine.StepFrameUntil((pc, opcode) =>
+            {
+                if (!_breakpoints.TryMatch(pc, opcode, out var match))
+                {
+                    return false;
+                }
+
+                breakpointMatch = match;
+                return true;
+            });
+
+            if (interrupted && breakpointMatch is not null)
             {
                 _mode = DebugExecutionMode.Paused;
                 _stopReason = DebugStopReason.BreakpointHit;
@@ -103,8 +113,6 @@ namespace Chip8Emu.Core.Debugging
                 RecordTransition();
                 return;
             }
-
-            _machine.StepFrame();
         }
 
         private void RecordTransition()

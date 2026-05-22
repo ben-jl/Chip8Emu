@@ -26,6 +26,13 @@ namespace Chip8Emu.Core.Machine
         void StepFrame();
 
         /// <summary>
+        /// Executes up to <see cref="EmulationOptions.InstructionsPerFrame"/> instructions for one frame,
+        /// pausing before an instruction when <paramref name="shouldPauseBeforeInstruction"/> returns true.
+        /// Returns true when execution was interrupted by the predicate.
+        /// </summary>
+        bool StepFrameUntil(Func<ushort, ushort, bool> shouldPauseBeforeInstruction);
+
+        /// <summary>
         /// Captures current state for diagnostics and debugging workflows.
         /// </summary>
         MachineSnapshot CurrentSnapshot();
