@@ -24,7 +24,7 @@ namespace Chip8Emu.Test.Core
             private readonly MonochromeFrameBuffer _display;
 
             public TestableCpu(
-                bool resetCarryFlagOnBitwiseOps = true, 
+                bool resetCarryFlagOnBitwiseOps = true,
                 bool incrementIOnStoreLoadMemoryOps = false,
                 bool shiftUsesVY = false,
                 bool clipSprites = true,
@@ -33,24 +33,26 @@ namespace Chip8Emu.Test.Core
                 var memoryMap = new MemoryMap();
                 _memoryBus = new MemoryBus(memoryMap.MemorySize);
                 _display = new MonochromeFrameBuffer(64, 32);
+                var cpuConfig = new Chip8CpuConfig(
+                    ResetCarryFlagOnBitwiseOps: resetCarryFlagOnBitwiseOps,
+                    IncrementIOnStoreLoadMemoryOps: incrementIOnStoreLoadMemoryOps,
+                    ShiftUsesVy: shiftUsesVY,
+                    ClipSprites: clipSprites,
+                    JumpWithV0: jumpWithV0);
                 _cpu = new Chip8Cpu(
-                    _memoryBus, 
-                    memoryMap, 
-                    _display, 
-                    randomSeed: 12345, 
+                    _memoryBus,
+                    memoryMap,
+                    _display,
+                    randomSeed: 12345,
                     new KeypadState(),
                     new Chip8Emu.Core.Timing.Timers(),
-                    resetCarryFlagOnBitwiseOps,
-                    incrementIOnStoreLoadMemoryOps,
-                    shiftUsesVY,
-                    clipSprites,
-                    jumpWithV0);
-                
+                    cpuConfig);
+
                 // Use reflection to access private _registers field
-                var registersField = typeof(Chip8Cpu).GetField("_registers", 
+                var registersField = typeof(Chip8Cpu).GetField("_registers",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                 var registersInstance = (Registers)registersField!.GetValue(_cpu)!;
-                
+
                 // Create testable wrapper
                 _registers = new TestableRegisters(memoryMap);
                 registersField.SetValue(_cpu, _registers);

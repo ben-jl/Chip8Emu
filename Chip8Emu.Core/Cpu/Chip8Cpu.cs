@@ -28,17 +28,13 @@ namespace Chip8Emu.Core.Cpu
         private readonly bool _jumpWithV0;
 
         public Chip8Cpu(
-            IMemoryBus memoryBus, 
-            MemoryMap memoryMap, 
-            IFrameBuffer display, 
-            int randomSeed, 
+            IMemoryBus memoryBus,
+            MemoryMap memoryMap,
+            IFrameBuffer display,
+            int randomSeed,
             IKeypad keypad,
             Timers timers,
-            bool resetCarryFlagOnBitwiseOp,
-            bool incrementIOnStoreLoadMemoryOp,
-            bool shiftUsesVy,
-            bool clipSprites,
-            bool jumpWithV0,
+            Chip8CpuConfig cpuConfig,
             ITraceSink? traceSink = null)
         {
             ArgumentNullException.ThrowIfNull(memoryBus);
@@ -46,6 +42,7 @@ namespace Chip8Emu.Core.Cpu
             ArgumentNullException.ThrowIfNull(display);
             ArgumentNullException.ThrowIfNull(keypad);
             ArgumentNullException.ThrowIfNull(timers);
+            ArgumentNullException.ThrowIfNull(cpuConfig);
 
             _memoryMap = memoryMap;
             _memoryBus = memoryBus;
@@ -57,11 +54,11 @@ namespace Chip8Emu.Core.Cpu
             _keypad = keypad;
             _timers = timers;
             _traceSink = traceSink;
-            _resetCarryFlagOnBitwiseOp = resetCarryFlagOnBitwiseOp;
-            _incrementIOnStoreLoadMemoryOp = incrementIOnStoreLoadMemoryOp;
-            _shiftUsesVy = shiftUsesVy;
-            _clipSprites = clipSprites;
-            _jumpWithV0 = jumpWithV0;
+            _resetCarryFlagOnBitwiseOp = cpuConfig.ResetCarryFlagOnBitwiseOps;
+            _incrementIOnStoreLoadMemoryOp = cpuConfig.IncrementIOnStoreLoadMemoryOps;
+            _shiftUsesVy = cpuConfig.ShiftUsesVy;
+            _clipSprites = cpuConfig.ClipSprites;
+            _jumpWithV0 = cpuConfig.JumpWithV0;
         }
 
         public CpuSnapshot CurrentSnapshot()

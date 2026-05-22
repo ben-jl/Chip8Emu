@@ -39,6 +39,12 @@ namespace Chip8Emu.Core.Machine
             _memoryMap = new MemoryMap();
             _display = new MonochromeFrameBuffer(64, 32);
             _keypad = new KeypadState();
+            var cpuConfig = new Chip8CpuConfig(
+                ResetCarryFlagOnBitwiseOps: _options.ResetCarryFlagOnBitwiseOps,
+                IncrementIOnStoreLoadMemoryOps: _options.IncrementIOnStoreLoadMemoryOps,
+                ShiftUsesVy: _options.ShiftUsesVy,
+                ClipSprites: _options.ClipSprites,
+                JumpWithV0: _options.JumpWithV0);
             _cpu = new Chip8Cpu(
                 _memory,
                 _memoryMap,
@@ -46,11 +52,7 @@ namespace Chip8Emu.Core.Machine
                 _options.RandomSeed,
                 _keypad,
                 _timers,
-                _options.ResetCarryFlagOnBitwiseOps,
-                _options.IncrementIOnStoreLoadMemoryOps,
-                _options.ShiftUsesVy,
-                _options.ClipSprites,
-                _options.JumpWithV0,
+                cpuConfig,
                 traceSink);
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
