@@ -11,6 +11,7 @@ namespace Chip8Emu.Core.Debugging.Trace
         FrameStarted = 6,
         FrameCompleted = 7,
         TimerTicked = 8,
-        KeyStateChanged = 9
+        KeyStateChanged = 9,
+        MemoryBlockWrite = 10
     }
 }

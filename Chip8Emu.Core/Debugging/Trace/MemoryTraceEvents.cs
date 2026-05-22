@@ -7,4 +7,8 @@ namespace Chip8Emu.Core.Debugging.Trace
     public sealed record MemoryWriteTraceEvent(
         ushort Address,
         byte Value) : TraceEvent(TraceEventKind.MemoryWrite);
+
+    public sealed record MemoryBlockWrittenTraceEvent(
+        ushort StartAddress,
+        ReadOnlyMemory<byte> Data) : TraceEvent(TraceEventKind.MemoryBlockWrite);
 }

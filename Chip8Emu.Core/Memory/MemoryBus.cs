@@ -66,7 +66,11 @@ namespace Chip8Emu.Core.Memory
             {
                 _memory[startAddress + i] = data[i];
                 RecordAccess(MemoryAccessKind.Write, (ushort)(startAddress + i), data[i]);
-                _traceSink?.Publish(new MemoryWriteTraceEvent((ushort)(startAddress + i), data[i]));
+            }
+
+            if (_traceSink != null)
+            {
+                _traceSink.Publish(new MemoryBlockWrittenTraceEvent(startAddress, data.ToArray().AsMemory()));
             }
         }
 
