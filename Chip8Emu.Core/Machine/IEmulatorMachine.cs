@@ -46,5 +46,15 @@ namespace Chip8Emu.Core.Machine
         /// Reads the opcode at the current program counter without advancing execution.
         /// </summary>
         ushort PeekOpcodeAtProgramCounter();
+
+        /// <summary>
+        /// Returns memory accesses newer than <paramref name="sequenceExclusive"/>.
+        /// </summary>
+        IReadOnlyList<MemoryAccessSnapshot> GetMemoryAccessesSince(long sequenceExclusive);
+
+        /// <summary>
+        /// Gets the latest memory-access sequence number observed by the machine.
+        /// </summary>
+        long CurrentMemoryAccessSequence { get; }
     }
 }

@@ -58,6 +58,7 @@ namespace Chip8Emu.Core.Machine
         public IFrameBuffer Display => _display;
 
         public bool SoundEnabled => _timers.SoundTimer > 0;
+        public long CurrentMemoryAccessSequence => _memory.CurrentAccessSequence;
 
         public void LoadRom(ReadOnlySpan<byte> romData)
         {
@@ -205,9 +206,14 @@ namespace Chip8Emu.Core.Machine
         public ushort PeekOpcodeAtProgramCounter()
         {
             var pc = _cpu.CurrentSnapshot().PC;
-            var high = _memory.Read(pc);
-            var low = _memory.Read((ushort)(pc + 1));
+            var high = _memory.ReadRaw(pc);
+            var low = _memory.ReadRaw((ushort)(pc + 1));
             return (ushort)((high << 8) | low);
+        }
+
+        public IReadOnlyList<MemoryAccessSnapshot> GetMemoryAccessesSince(long sequenceExclusive)
+        {
+            return _memory.GetAccessesSince(sequenceExclusive);
         }
     }
 }

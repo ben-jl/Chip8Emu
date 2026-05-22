@@ -15,6 +15,8 @@ namespace Chip8Emu.Core.Debugging
         private long _instructionSteps;
         private DateTimeOffset _lastTransitionUtc;
         private BreakpointMatch? _lastBreakpointMatch;
+        private MachineSnapshot _previousSnapshot;
+        private long _memoryAccessCursor;
 
         public EmulatorDebugController(IEmulatorMachine machine)
             : this(machine, null)
@@ -33,6 +35,8 @@ namespace Chip8Emu.Core.Debugging
             _instructionSteps = 0;
             _lastTransitionUtc = DateTimeOffset.UtcNow;
             _lastBreakpointMatch = null;
+            _previousSnapshot = _machine.CurrentSnapshot();
+            _memoryAccessCursor = _machine.CurrentMemoryAccessSequence;
         }
 
         public DebugStateSnapshot State => new(
@@ -56,6 +60,8 @@ namespace Chip8Emu.Core.Debugging
             _mode = DebugExecutionMode.Paused;
             _stopReason = DebugStopReason.UserPause;
             _lastBreakpointMatch = null;
+            _previousSnapshot = _machine.CurrentSnapshot();
+            _memoryAccessCursor = _machine.CurrentMemoryAccessSequence;
             RecordTransition();
         }
 
@@ -83,6 +89,8 @@ namespace Chip8Emu.Core.Debugging
             _instructionSteps++;
             _stopReason = DebugStopReason.StepComplete;
             _lastBreakpointMatch = null;
+            _previousSnapshot = _machine.CurrentSnapshot();
+            _memoryAccessCursor = _machine.CurrentMemoryAccessSequence;
             RecordTransition();
         }
 
@@ -94,16 +102,41 @@ namespace Chip8Emu.Core.Debugging
             }
 
             BreakpointMatch? breakpointMatch = null;
+            var previousSnapshot = _previousSnapshot;
+            var memoryCursor = _memoryAccessCursor;
             var interrupted = _machine.StepFrameUntil((pc, opcode) =>
             {
-                if (!_breakpoints.TryMatch(pc, opcode, out var match))
+                var currentSnapshot = _machine.CurrentSnapshot();
+                var memoryAccesses = _machine.GetMemoryAccessesSince(memoryCursor);
+                if (memoryAccesses.Count > 0)
                 {
+                    memoryCursor = memoryAccesses[^1].Sequence;
+                }
+                else
+                {
+                    memoryCursor = _machine.CurrentMemoryAccessSequence;
+                }
+
+                var context = new BreakpointEvaluationContext(
+                    pc,
+                    opcode,
+                    currentSnapshot,
+                    previousSnapshot,
+                    memoryAccesses);
+
+                if (!_breakpoints.TryMatch(context, out var match))
+                {
+                    previousSnapshot = currentSnapshot;
                     return false;
                 }
 
                 breakpointMatch = match;
+                previousSnapshot = currentSnapshot;
                 return true;
             });
+
+            _previousSnapshot = previousSnapshot;
+            _memoryAccessCursor = memoryCursor;
 
             if (interrupted && breakpointMatch is not null)
             {
@@ -113,6 +146,8 @@ namespace Chip8Emu.Core.Debugging
                 RecordTransition();
                 return;
             }
+
+            _lastBreakpointMatch = null;
         }
 
         private void RecordTransition()
