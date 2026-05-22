@@ -17,6 +17,7 @@ namespace Chip8Emu.Core.Machine
         private readonly Timers _timers;
         private readonly MemoryMap _memoryMap;
         private readonly ITraceSink? _traceSink;
+        private byte[] _loadedRom = Array.Empty<byte>();
 
         private readonly EmulationOptions _options;
         private int _instructionsSinceLastTimerTick;
@@ -61,7 +62,8 @@ namespace Chip8Emu.Core.Machine
         public void LoadRom(ReadOnlySpan<byte> romData)
         {
             Reset();
-            _memory.WriteBlock(_memoryMap.RomStart, romData);
+            _loadedRom = romData.ToArray();
+            _memory.WriteBlock(_memoryMap.RomStart, _loadedRom);
         }
 
         public void Reset()
@@ -72,6 +74,7 @@ namespace Chip8Emu.Core.Machine
             _timers.Reset();
             _cpu.Reset();
             _instructionsSinceLastTimerTick = 0;
+            _loadedRom = Array.Empty<byte>();
 
             Chip8Font.LoadInto(_memory, _memoryMap);
         }
@@ -160,6 +163,20 @@ namespace Chip8Emu.Core.Machine
                 _timers.DelayTimer,
                 _timers.SoundTimer
             );
+        }
+
+        public bool TryGetLoadedRom(out ReadOnlyMemory<byte> romData, out ushort romStartAddress)
+        {
+            if (_loadedRom.Length == 0)
+            {
+                romData = ReadOnlyMemory<byte>.Empty;
+                romStartAddress = _memoryMap.RomStart;
+                return false;
+            }
+
+            romData = _loadedRom;
+            romStartAddress = _memoryMap.RomStart;
+            return true;
         }
     }
 }

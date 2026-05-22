@@ -29,5 +29,10 @@ namespace Chip8Emu.Core.Machine
         /// Captures current state for diagnostics and debugging workflows.
         /// </summary>
         MachineSnapshot CurrentSnapshot();
+
+        /// <summary>
+        /// Returns currently loaded ROM bytes when available.
+        /// </summary>
+        bool TryGetLoadedRom(out ReadOnlyMemory<byte> romData, out ushort romStartAddress);
     }
 }
