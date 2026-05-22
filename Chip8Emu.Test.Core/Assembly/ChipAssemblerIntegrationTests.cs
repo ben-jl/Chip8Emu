@@ -1,5 +1,6 @@
 using Chip8Emu.Core.Assembly;
 using Chip8Emu.Core.Assembly.Codegen;
+using Chip8Emu.Core.Machine;
 
 namespace Chip8Emu.Test.Core.Assembly
 {
@@ -430,6 +431,178 @@ namespace Chip8Emu.Test.Core.Assembly
 
             var error = Assert.Single(result.Diagnostics.Errors);
             Assert.Equal(2, error.LineNumber);
+        }
+
+        // ---- End-to-end: Assembly → Machine Execution ----
+
+        [Fact]
+        public void EndToEnd_SimpleLoadAndAdd_ExecutesCorrectly()
+        {
+            var source = """
+                LD V0, 0x05
+                LD V1, 0x03
+                ADD V0, V1
+                RET
+                """;
+
+            var result = Assemble(source);
+
+            Assert.True(result.Success);
+            var machine = new Chip8Machine(new EmulationOptions { RandomSeed = 1234 });
+            machine.LoadRom(result.Bytecode!);
+
+            var snapshot1 = machine.CurrentSnapshot();
+            Assert.Equal((ushort)0x200, snapshot1.Cpu.PC);
+
+            machine.StepInstruction(); // LD V0, 0x05
+            var snapshot2 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x05, snapshot2.Cpu.V[0]);
+            Assert.Equal((ushort)0x202, snapshot2.Cpu.PC);
+
+            machine.StepInstruction(); // LD V1, 0x03
+            var snapshot3 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x03, snapshot3.Cpu.V[1]);
+            Assert.Equal((ushort)0x204, snapshot3.Cpu.PC);
+
+            machine.StepInstruction(); // ADD V0, V1
+            var snapshot4 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x08, snapshot4.Cpu.V[0]); // 5 + 3 = 8
+            Assert.Equal((ushort)0x206, snapshot4.Cpu.PC);
+        }
+
+        [Fact]
+        public void EndToEnd_LabelJumps_ExecutesCorrectly()
+        {
+            var source = """
+                ORG 0x200
+                LD V0, 0x00
+                JP SKIP
+                LD V0, 0xFF
+                SKIP:
+                LD V1, 0x42
+                RET
+                """;
+
+            var result = Assemble(source);
+
+            Assert.True(result.Success);
+            var machine = new Chip8Machine(new EmulationOptions { RandomSeed = 1234 });
+            machine.LoadRom(result.Bytecode!);
+
+            machine.StepInstruction(); // LD V0, 0x00
+            var snapshot1 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x00, snapshot1.Cpu.V[0]);
+
+            machine.StepInstruction(); // JP SKIP (jumps to 0x206)
+            var snapshot2 = machine.CurrentSnapshot();
+            Assert.Equal((ushort)0x206, snapshot2.Cpu.PC); // Should skip the LD V0, 0xFF
+
+            machine.StepInstruction(); // LD V1, 0x42
+            var snapshot3 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x42, snapshot3.Cpu.V[1]);
+            Assert.Equal((byte)0x00, snapshot3.Cpu.V[0]); // V0 should still be 0x00 (not 0xFF)
+        }
+
+        [Fact]
+        public void EndToEnd_DefinesAndRegisters_ExecutesCorrectly()
+        {
+            var source = """
+                DEFINE MAGIC_NUMBER 0x7F
+                LD V5, MAGIC_NUMBER
+                LD V6, MAGIC_NUMBER
+                ADD V5, V6
+                RET
+                """;
+
+            var result = Assemble(source);
+
+            Assert.True(result.Success);
+            var machine = new Chip8Machine(new EmulationOptions { RandomSeed = 1234 });
+            machine.LoadRom(result.Bytecode!);
+
+            machine.StepInstruction(); // LD V5, 0x7F
+            var snapshot1 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x7F, snapshot1.Cpu.V[5]);
+
+            machine.StepInstruction(); // LD V6, 0x7F
+            var snapshot2 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x7F, snapshot2.Cpu.V[6]);
+
+            machine.StepInstruction(); // ADD V5, V6
+            var snapshot3 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0xFE, snapshot3.Cpu.V[5]); // 0x7F + 0x7F = 0xFE
+        }
+
+        [Fact]
+        public void EndToEnd_DrawOperations_UpdatesDisplay()
+        {
+            var source = """
+                ORG 0x200
+                LD V0, 0x00
+                LD V1, 0x00
+                LD I, 0x200
+                DRW V0, V1, 5
+                RET
+                """;
+
+            var result = Assemble(source);
+
+            Assert.True(result.Success);
+            var machine = new Chip8Machine(new EmulationOptions { RandomSeed = 1234 });
+            machine.LoadRom(result.Bytecode!);
+
+            // Display should be blank initially
+            var initialBuffer = machine.Display.Buffer.ToArray();
+            Assert.True(initialBuffer.All(pixel => pixel == 0));
+
+            machine.StepInstruction(); // LD V0, 0x00
+            machine.StepInstruction(); // LD V1, 0x00
+            machine.StepInstruction(); // LD I, 0x200
+            machine.StepInstruction(); // DRW V0, V1, 5
+
+            var newBuffer = machine.Display.Buffer.ToArray();
+            // Display should have been modified (sprite drawn at position 0,0)
+            // At least some pixels should be set
+            Assert.Contains((byte)1, newBuffer);
+        }
+
+        [Fact]
+        public void EndToEnd_RegisterOperations_ExecuteCorrectly()
+        {
+            var source = """
+                LD V0, 0x0F
+                LD V1, 0x01
+                OR V0, V1
+                AND V0, V1
+                XOR V0, V1
+                RET
+                """;
+
+            var result = Assemble(source);
+
+            Assert.True(result.Success);
+            var machine = new Chip8Machine(new EmulationOptions { RandomSeed = 1234 });
+            machine.LoadRom(result.Bytecode!);
+
+            machine.StepInstruction(); // LD V0, 0x0F
+            var snap1 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x0F, snap1.Cpu.V[0]);
+
+            machine.StepInstruction(); // LD V1, 0x01
+            var snap2 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x01, snap2.Cpu.V[1]);
+
+            machine.StepInstruction(); // OR V0, V1 -> 0x0F | 0x01 = 0x0F
+            var snap3 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x0F, snap3.Cpu.V[0]);
+
+            machine.StepInstruction(); // AND V0, V1 -> 0x0F & 0x01 = 0x01
+            var snap4 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x01, snap4.Cpu.V[0]);
+
+            machine.StepInstruction(); // XOR V0, V1 -> 0x01 ^ 0x01 = 0x00
+            var snap5 = machine.CurrentSnapshot();
+            Assert.Equal((byte)0x00, snap5.Cpu.V[0]);
         }
     }
 }
