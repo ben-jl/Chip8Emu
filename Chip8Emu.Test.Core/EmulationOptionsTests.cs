@@ -9,13 +9,13 @@ namespace Chip8Emu.Test.Core
         {
             var options = EmulationOptions.Default;
 
-            Assert.Equal(10, options.InstructionsPerFrame);
-            Assert.False(options.ShiftUsesVy);
+            Assert.Equal(50, options.InstructionsPerFrame);
+            Assert.True(options.ShiftUsesVy);
             Assert.True(options.JumpWithV0);
             Assert.True(options.ClipSprites);
             Assert.True(options.ResetCarryFlagOnBitwiseOps);
-            Assert.False(options.IncrementIOnStoreLoadMemoryOps);
-            Assert.False(options.DisplayWaitOnDraw);
+            Assert.True(options.IncrementIOnStoreLoadMemoryOps);
+            Assert.True(options.DisplayWaitOnDraw);
             Assert.Equal(DisplayWaitScope.AllDisplayModes, options.DisplayWaitScope);
         }
 
