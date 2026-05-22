@@ -1,7 +1,10 @@
-﻿using Chip8.SdlHost;
+using Chip8.SdlHost;
+using Chip8Emu.Core.Debugging;
+using Chip8Emu.Core.Debugging.Disassembly;
+using Chip8Emu.Core.Debugging.Trace;
 using Chip8Emu.Core.Machine;
+using Chip8Emu.SdlHost.Debug;
 using SDL3;
-using System.Reflection.PortableExecutable;
 
 namespace Chip8Emu.SdlHost;
 
@@ -36,36 +39,61 @@ internal static class Program
             return;
         }
 
+        var traceBuffer = new InMemoryTraceBuffer(4000);
+        var machine = GetTestMachine(traceBuffer);
+        var controller = new EmulatorDebugController(machine);
+        var disassembler = new Chip8Disassembler();
+        var debugViewState = new SdlDebugViewState();
+        var overlayRenderer = new SdlDebugOverlayRenderer(renderer, WindowWidth, WindowHeight);
         var frameBufferRenderer = new SdlFramebufferRenderer(renderer, Scale);
-        using var audio = new SdlBeepAudio();
-        var machine = GetTestMachine();
 
+        using var audio = new SdlBeepAudio();
         var running = true;
         while (running)
         {
             while (SDL.PollEvent(out var sdlEvent))
             {
                 var eventType = (SDL.EventType)sdlEvent.Type;
-
                 if (eventType == SDL.EventType.Quit)
                 {
                     running = false;
                     continue;
                 }
 
-                SdlInput.HandleEvent(sdlEvent, machine);
+                var handledByDebug = SdlDebugInputHandler.HandleEvent(
+                    sdlEvent,
+                    debugViewState,
+                    machine,
+                    controller);
+                if (handledByDebug)
+                {
+                    continue;
+                }
+
+                if (!debugViewState.IsDebugInputMode)
+                {
+                    _ = SdlInput.HandleChip8KeyEvent(sdlEvent, machine);
+                }
             }
 
-            machine.StepFrame();
+            controller.Update();
 
             audio.SetEnabled(machine.SoundEnabled);
             audio.Update();
 
             frameBufferRenderer.Render(
                 machine.Display.Buffer,
-                Chip8Width,
-                Chip8Height);
+                machine.Display.Width,
+                machine.Display.Height);
 
+            overlayRenderer.Render(
+                debugViewState,
+                controller,
+                machine,
+                disassembler,
+                traceBuffer);
+
+            SDL.RenderPresent(renderer);
             SDL.Delay(16); // Roughly 60 FPS
         }
 
@@ -74,28 +102,15 @@ internal static class Program
         SDL.Quit();
     }
 
-    private static ReadOnlySpan<byte> GetTestDisplayBuffer()
+    private static Chip8Machine GetTestMachine(ITraceSink traceSink)
     {
-        var machine = new Chip8Machine();
-        machine.LoadRom([
-                
-                ]);
-
-        machine.StepInstruction(); // LD V0, 1
-        machine.StepInstruction(); // DRW V0, V0, 5
-
-        return machine.Display.Buffer;
-    }
-
-    private static Chip8Machine GetTestMachine()
-    {
-        var emuOptions = new EmulationOptions()
+        var emuOptions = new EmulationOptions
         {
             IncrementIOnStoreLoadMemoryOps = true,
             ShiftUsesVy = true,
             DisplayWaitOnDraw = true
         };
-        var machine = new Chip8Machine(emuOptions);
+        var machine = new Chip8Machine(emuOptions, traceSink);
 
         //var testRomPath = "C:\\Users\\blevalley\\Downloads\\1-chip8-logo (1).ch8";
         //var testRomPath = "C:\\Users\\blevalley\\Downloads\\2-ibm-logo.ch8";
@@ -104,14 +119,6 @@ internal static class Program
         var testRomPath = "C:\\Users\\blevalley\\Downloads\\5-quirks.ch8";
         var bytes = File.ReadAllBytes(testRomPath);
         machine.LoadRom(bytes);
-//        machine.LoadRom([
-//            0xF0, 0x0A, // wait for keypress and store in V0
-////            0x60, 0x01, // LD V0, 1
-//            0xA0, 0x0A, // LD I, 0x00A (location of the two sprite)
-//            0xD0, 0x05, // DRW V0, V0, 5 ; Should be the two sprite
-//            0x12, 0x04  // JP 0x204 ; Loop indefinitely without redrawing
-//            ]);
-
         return machine;
     }
 }

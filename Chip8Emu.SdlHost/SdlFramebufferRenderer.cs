@@ -48,8 +48,6 @@ namespace Chip8Emu.SdlHost
                     SDL.RenderFillRect(_renderer, ref rect);
                 }
             }
-
-            SDL.RenderPresent(_renderer);
         }
     }
 }
